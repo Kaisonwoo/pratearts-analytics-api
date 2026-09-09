@@ -6,7 +6,8 @@
 - Nenhum segredo é aceito em arquivos, parâmetros de URL, respostas públicas ou logs.
 - `PRAConfig` expõe apenas configurações não sensíveis e indicadores de presença.
 - `PRASecrets` centraliza a leitura de credenciais e a gravação atômica dos tokens.
-- Atualizações de tokens usam `LockService` para impedir duas execuções simultâneas de sobrescreverem o estado.
+- Atualizações de tokens usam `LockService`; a necessidade de renovação é relida dentro do lock para impedir duas execuções simultâneas de consumirem o mesmo refresh token.
+- Respostas de renovação são validadas por completo antes de access token, refresh token e expiração serem gravados juntos.
 
 ## Propriedades
 
@@ -62,3 +63,4 @@ O health check pode retornar:
 Ele nunca retorna Client ID, Client Secret, access token ou refresh token.
 
 O passo a passo completo de implantação e primeira autorização está em [`oauth-authorization.md`](oauth-authorization.md).
+O fluxo de renovação automática e seu teste manual seguro estão em [`token-renewal.md`](token-renewal.md).
