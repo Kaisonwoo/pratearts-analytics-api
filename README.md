@@ -4,7 +4,7 @@ Integração analítica para transformar dados operacionais do Bling em relatór
 
 ## Estado atual
 
-O projeto está no Sprint 0 — Fundação. Esta versão entrega o esqueleto do repositório, o manifesto do Apps Script, a configuração segura por Script Properties e as validações locais iniciais.
+O projeto está no Sprint 0 — Fundação. Esta versão entrega o esqueleto do repositório, o manifesto do Apps Script, a configuração segura por Script Properties, o armazenamento protegido de tokens e as validações locais iniciais.
 
 ## Decisões do MVP
 
@@ -98,8 +98,8 @@ Esse comando valida a estrutura, o manifesto e padrões comuns de vazamento de s
 ## Rastreabilidade
 
 - Projeto Jira: [PRA — Pratearts Analytics API](https://kaisonwooo.atlassian.net/browse/PRA)
-- História desta entrega: PRA-10 / US-002
-- Subtarefa técnica: PRA-43 / TT-002
+- Estrutura inicial: PRA-10 / US-002 e PRA-43 / TT-002
+- Configuração segura: PRA-8 / US-003 e PRA-48 / TT-003
 
 ## Referências oficiais
 
