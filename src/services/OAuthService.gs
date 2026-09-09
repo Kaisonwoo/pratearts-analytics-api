@@ -53,7 +53,7 @@ var PRAOAuthService = (function () {
     };
   }
 
-  function exchangeAuthorizationCode_(code) {
+  function requestToken_(payload, rejectionEvent) {
     var credentials = PRASecrets.getClientCredentials();
     var basicCredentials = Utilities.base64Encode(
       credentials.clientId + ':' + credentials.clientSecret
@@ -66,10 +66,7 @@ var PRAOAuthService = (function () {
         Accept: 'application/json',
         'enable-jwt': '1'
       },
-      payload: {
-        grant_type: 'authorization_code',
-        code: code
-      },
+      payload: payload,
       muteHttpExceptions: true
     });
     var statusCode = response.getResponseCode();
@@ -82,15 +79,71 @@ var PRAOAuthService = (function () {
     }
 
     if (statusCode < 200 || statusCode >= 300) {
-      var oauthCode = body && body.error ? String(body.error) : 'http_' + statusCode;
-      PRALogger.warn('bling_oauth_token_rejected', {
+      var candidate = body && body.error ? String(body.error) : 'http_' + statusCode;
+      var oauthCode = /^[A-Za-z0-9_.-]{1,64}$/.test(candidate) ? candidate : 'oauth_error';
+      PRALogger.warn(rejectionEvent, {
         statusCode: statusCode,
         oauthError: oauthCode
       });
-      throw new Error('O Bling recusou o código de autorização: ' + oauthCode + '.');
+      throw new Error('O Bling recusou a solicitação OAuth: ' + oauthCode + '.');
     }
 
+    return body;
+  }
+
+  function exchangeAuthorizationCode_(code) {
+    var body = requestToken_({
+      grant_type: 'authorization_code',
+      code: code
+    }, 'bling_oauth_token_rejected');
     return PRASecrets.saveTokenResponse(body);
+  }
+
+  function refreshAccessToken(minValiditySeconds) {
+    try {
+      var result = PRASecrets.refreshTokensAtomically(
+        minValiditySeconds,
+        function (currentRefreshToken) {
+          return requestToken_({
+            grant_type: 'refresh_token',
+            refresh_token: currentRefreshToken
+          }, 'bling_oauth_refresh_rejected');
+        }
+      );
+
+      PRALogger.info(
+        result.refreshed ? 'bling_oauth_token_refreshed' : 'bling_oauth_refresh_not_required',
+        {
+          refreshed: result.refreshed,
+          expiresAt: result.tokenStatus.expiresAt
+        }
+      );
+      return {
+        ok: true,
+        code: result.refreshed ? 'token_refreshed' : 'token_still_valid',
+        refreshed: result.refreshed,
+        tokenStatus: result.tokenStatus
+      };
+    } catch (error) {
+      PRALogger.error('bling_oauth_refresh_failed', { reason: 'refresh_failed' });
+      return safeFailure_(
+        'refresh_failed',
+        'Não foi possível renovar o acesso ao Bling. O último estado consistente foi preservado.'
+      );
+    }
+  }
+
+  function getValidAccessToken(minValiditySeconds) {
+    var result = refreshAccessToken(minValiditySeconds);
+    if (!result.ok) {
+      throw new Error('Não foi possível obter um access token válido do Bling.');
+    }
+
+    var snapshot = PRASecrets.getTokenSnapshot();
+    if (!snapshot.accessToken || !PRASecrets.hasUsableAccessToken(minValiditySeconds)) {
+      throw new Error('Access token válido não está disponível.');
+    }
+    return snapshot.accessToken;
   }
 
   function handleCallback(parameters) {
@@ -142,6 +195,8 @@ var PRAOAuthService = (function () {
 
   return Object.freeze({
     createAuthorizationRequest: createAuthorizationRequest,
-    handleCallback: handleCallback
+    handleCallback: handleCallback,
+    refreshAccessToken: refreshAccessToken,
+    getValidAccessToken: getValidAccessToken
   });
 })();
