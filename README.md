@@ -1,0 +1,109 @@
+# Pratearts Analytics API
+
+Integração analítica para transformar dados operacionais do Bling em relatórios e dashboards administrativos da Pratearts.
+
+## Estado atual
+
+O projeto está no Sprint 0 — Fundação. Esta versão entrega o esqueleto do repositório, o manifesto do Apps Script, a configuração segura por Script Properties e as validações locais iniciais.
+
+## Decisões do MVP
+
+- Fonte operacional: Bling API v3.
+- Plataforma de vendas: Nuvemshop.
+- Carga histórica inicial: últimos 12 meses.
+- Venda válida: pedido em situação Atendido.
+- Data de referência: data do pedido.
+- Devoluções e estornos: reduzem quantidade e faturamento quando identificáveis.
+- Atualização diária planejada: 06:00 em `America/Sao_Paulo`.
+- Público do dashboard: Administração.
+
+## Arquitetura
+
+1. O Apps Script consulta a API do Bling somente para leitura.
+2. Dados brutos são persistidos sem sobrescrever a origem.
+3. Uma camada de tratamento normaliza pedidos, itens, produtos, variações e fornecedores.
+4. Indicadores são expostos para o dashboard e para a API de relatórios.
+5. Logs registram execução, volume, duração e falhas sem incluir segredos.
+
+Mais detalhes estão em [`docs/architecture.md`](docs/architecture.md).
+
+## Estrutura do repositório
+
+```text
+src/
+  api/          Entradas do web app
+  clients/      Clientes de serviços externos
+  config/       Leitura de configurações seguras
+  core/         Erros e logging compartilhados
+  jobs/         Rotinas agendadas
+  services/     Regras de aplicação
+  appsscript.json
+tests/          Testes locais de estrutura e segurança
+scripts/        Validações executadas antes de publicar
+config/         Exemplos sem valores reais
+docs/           Arquitetura, ADRs e instruções
+```
+
+## Pré-requisitos
+
+- Node.js 22 ou superior.
+- Conta Google com acesso ao projeto Apps Script.
+- Apps Script API habilitada na conta Google.
+- Aplicativo cadastrado na API v3 do Bling.
+
+## Preparação local
+
+```bash
+npm install
+npm run check
+npm run clasp:login
+```
+
+Copie `.clasp.json.example` para `.clasp.json` e substitua apenas o `scriptId`. O arquivo real é ignorado pelo Git.
+
+No PowerShell:
+
+```powershell
+Copy-Item .clasp.json.example .clasp.json
+```
+
+Depois de configurar o projeto remoto:
+
+```bash
+npm run clasp:status
+npm run clasp:push
+npm run clasp:open
+```
+
+## Configuração segura
+
+Os valores reais devem ser cadastrados em **Configurações do projeto → Propriedades do script** no Apps Script. Consulte [`docs/configuration.md`](docs/configuration.md).
+
+Nunca envie ao GitHub:
+
+- `client_secret`;
+- access token;
+- refresh token;
+- `.clasp.json` real;
+- IDs ou payloads comerciais não anonimizados.
+
+## Qualidade
+
+```bash
+npm run check
+```
+
+Esse comando valida a estrutura, o manifesto e padrões comuns de vazamento de segredos, e depois executa os testes locais.
+
+## Rastreabilidade
+
+- Projeto Jira: [PRA — Pratearts Analytics API](https://kaisonwooo.atlassian.net/browse/PRA)
+- História desta entrega: PRA-10 / US-002
+- Subtarefa técnica: PRA-43 / TT-002
+
+## Referências oficiais
+
+- [Apps Script manifest](https://developers.google.com/apps-script/manifest)
+- [google/clasp](https://github.com/google/clasp)
+- [Bling API v3](https://developer.bling.com.br/bling-api)
+- [Migração do Bling para JWT](https://developer.bling.com.br/migracao-jwt)

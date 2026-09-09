@@ -1,0 +1,14 @@
+node_modules/
+coverage/
+dist/
+*.log
+.DS_Store
+.idea/
+.vscode/
+.clasp.json
+.clasprc.json
+.env
+.env.*
+!.env.example
+*.local.json
+config/script-properties.local.json

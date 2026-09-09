@@ -1,0 +1,23 @@
+{
+  "name": "pratearts-analytics-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Integração analítica entre Bling, Google Apps Script e dashboards da Pratearts.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test",
+    "validate": "node scripts/validate-project.mjs",
+    "check": "npm run validate && npm test",
+    "clasp:login": "clasp login",
+    "clasp:open": "clasp open",
+    "clasp:pull": "clasp pull",
+    "clasp:push": "clasp push",
+    "clasp:status": "clasp status"
+  },
+  "devDependencies": {
+    "@google/clasp": "3.4.1"
+  }
+}
