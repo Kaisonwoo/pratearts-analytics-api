@@ -13,6 +13,7 @@ const requiredFiles = [
   'src/appsscript.json',
   'src/Main.gs',
   'src/config/Config.gs',
+  'src/config/Secrets.gs',
   'src/core/Logger.gs'
 ];
 
@@ -32,25 +33,26 @@ for (const forbidden of forbiddenFiles) {
   assert.ok(!rootFiles.includes(forbidden), `${forbidden} não pode ser versionado`);
 }
 
-const scanTargets = [
-  'src/Main.gs',
-  'src/config/Config.gs',
-  'src/core/Logger.gs',
-  'src/clients/BlingClient.gs',
-  'src/services/HealthService.gs',
-  'src/jobs/DailySyncJob.gs',
-  'src/api/WebApp.gs'
-];
+async function listGsFiles(directory) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const nested = await Promise.all(entries.map(async (entry) => {
+    const target = path.join(directory, entry.name);
+    return entry.isDirectory() ? listGsFiles(target) : [target];
+  }));
+  return nested.flat().filter((file) => file.endsWith('.gs'));
+}
+
+const scanTargets = await listGsFiles(path.join(root, 'src'));
 const secretPatterns = [
   /Bearer\s+[A-Za-z0-9._-]{20,}/,
   /(?:client_secret|refresh_token|access_token)\s*[:=]\s*['\"](?!BLING_(?:CLIENT_SECRET|REFRESH_TOKEN|ACCESS_TOKEN)['\"])[^'\"]{16,}['\"]/i,
   /AIza[0-9A-Za-z_-]{35}/
 ];
 
-for (const relative of scanTargets) {
-  const content = await readFile(path.join(root, relative), 'utf8');
+for (const target of scanTargets) {
+  const content = await readFile(target, 'utf8');
   for (const pattern of secretPatterns) {
-    assert.ok(!pattern.test(content), `Possível segredo encontrado em ${relative}`);
+    assert.ok(!pattern.test(content), `Possível segredo encontrado em ${path.relative(root, target)}`);
   }
 }
 
