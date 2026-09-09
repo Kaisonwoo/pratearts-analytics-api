@@ -19,9 +19,23 @@ var PRABlingClient = (function () {
     };
   }
 
+  function refreshAuthentication() {
+    return PRAOAuthService.refreshAccessToken(
+      PRAConfig.DEFAULTS.TOKEN_MIN_VALIDITY_SECONDS
+    );
+  }
+
+  function getAccessToken() {
+    return PRAOAuthService.getValidAccessToken(
+      PRAConfig.DEFAULTS.TOKEN_MIN_VALIDITY_SECONDS
+    );
+  }
+
   return Object.freeze({
     isConfigured: isConfigured,
     isAuthenticated: isAuthenticated,
-    getSecurityStatus: getSecurityStatus
+    getSecurityStatus: getSecurityStatus,
+    refreshAuthentication: refreshAuthentication,
+    getAccessToken: getAccessToken
   });
 })();

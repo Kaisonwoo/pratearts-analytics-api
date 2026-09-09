@@ -13,6 +13,7 @@ const requiredFiles = [
   'docs/adr/ADR-001-decisoes-fundacao.md',
   'docs/bling-api-mapping.md',
   'docs/oauth-authorization.md',
+  'docs/token-renewal.md',
   'docs/samples/bling/product-detail-with-variations.json',
   'docs/samples/bling/product-list.json',
   'docs/samples/bling/product-supplier-list.json',

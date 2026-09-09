@@ -50,8 +50,15 @@ var PRASecrets = (function () {
     };
   }
 
-  function getTokenStatus() {
-    var snapshot = getTokenSnapshot();
+  function normalizeMinValiditySeconds_(minValiditySeconds) {
+    var minimum = Number(minValiditySeconds);
+    if (!Number.isFinite(minimum) || minimum < 0) {
+      return PRAConfig.DEFAULTS.TOKEN_MIN_VALIDITY_SECONDS;
+    }
+    return minimum;
+  }
+
+  function getTokenStatusFromSnapshot_(snapshot) {
     var now = Date.now();
     return {
       accessTokenPresent: Boolean(snapshot.accessToken),
@@ -61,26 +68,24 @@ var PRASecrets = (function () {
     };
   }
 
-  function hasUsableAccessToken(minValiditySeconds) {
-    var snapshot = getTokenSnapshot();
-    var minimum = Number(minValiditySeconds);
-    if (!Number.isFinite(minimum) || minimum < 0) {
-      minimum = PRAConfig.DEFAULTS.TOKEN_MIN_VALIDITY_SECONDS;
-    }
+  function isSnapshotUsable_(snapshot, minValiditySeconds) {
     return Boolean(
       snapshot.accessToken &&
-      snapshot.expiresAt > Date.now() + minimum * 1000
+      snapshot.expiresAt > Date.now() + normalizeMinValiditySeconds_(minValiditySeconds) * 1000
     );
   }
 
-  function saveTokenResponse(tokenResponse) {
+  function buildTokenValues_(tokenResponse, fallbackRefreshToken) {
     var response = tokenResponse || {};
     var expiresIn = Number(response.expires_in);
+    var refreshToken = typeof response.refresh_token === 'string' && response.refresh_token
+      ? response.refresh_token
+      : fallbackRefreshToken;
 
     if (typeof response.access_token !== 'string' || !response.access_token) {
       throw new Error('Resposta OAuth inválida: access_token ausente.');
     }
-    if (typeof response.refresh_token !== 'string' || !response.refresh_token) {
+    if (typeof refreshToken !== 'string' || !refreshToken) {
       throw new Error('Resposta OAuth inválida: refresh_token ausente.');
     }
     if (!Number.isFinite(expiresIn) || expiresIn <= 0) {
@@ -92,13 +97,54 @@ var PRASecrets = (function () {
 
     var values = {};
     values[PRAConfig.KEYS.BLING_ACCESS_TOKEN] = response.access_token;
-    values[PRAConfig.KEYS.BLING_REFRESH_TOKEN] = response.refresh_token;
+    values[PRAConfig.KEYS.BLING_REFRESH_TOKEN] = refreshToken;
     values[PRAConfig.KEYS.BLING_TOKEN_EXPIRES_AT] = String(Date.now() + expiresIn * 1000);
+    return values;
+  }
+
+  function getTokenStatus() {
+    return getTokenStatusFromSnapshot_(getTokenSnapshot());
+  }
+
+  function hasUsableAccessToken(minValiditySeconds) {
+    return isSnapshotUsable_(getTokenSnapshot(), minValiditySeconds);
+  }
+
+  function saveTokenResponse(tokenResponse) {
+    var values = buildTokenValues_(tokenResponse, null);
 
     withLock_(function () {
       properties_().setProperties(values, false);
     });
     return getTokenStatus();
+  }
+
+  function refreshTokensAtomically(minValiditySeconds, refreshOperation) {
+    if (typeof refreshOperation !== 'function') {
+      throw new Error('Operação de renovação inválida.');
+    }
+
+    return withLock_(function () {
+      var snapshot = getTokenSnapshot();
+      if (isSnapshotUsable_(snapshot, minValiditySeconds)) {
+        return {
+          refreshed: false,
+          tokenStatus: getTokenStatusFromSnapshot_(snapshot)
+        };
+      }
+      if (!snapshot.refreshToken) {
+        throw new Error('Refresh token ausente. É necessária uma nova autorização.');
+      }
+
+      var tokenResponse = refreshOperation(snapshot.refreshToken);
+      var values = buildTokenValues_(tokenResponse, snapshot.refreshToken);
+      properties_().setProperties(values, false);
+
+      return {
+        refreshed: true,
+        tokenStatus: getTokenStatusFromSnapshot_(getTokenSnapshot())
+      };
+    });
   }
 
   function clearTokens() {
@@ -170,6 +216,7 @@ var PRASecrets = (function () {
     getTokenStatus: getTokenStatus,
     hasUsableAccessToken: hasUsableAccessToken,
     saveTokenResponse: saveTokenResponse,
+    refreshTokensAtomically: refreshTokensAtomically,
     clearTokens: clearTokens,
     saveOAuthState: saveOAuthState,
     consumeOAuthState: consumeOAuthState

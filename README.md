@@ -4,7 +4,7 @@ Integração analítica para transformar dados operacionais do Bling em relatór
 
 ## Estado atual
 
-O Sprint 0 — Fundação foi concluído. O projeto está no Sprint 1 — Acesso ao Bling, iniciando o fluxo OAuth 2.0 com `state` de uso único, callback seguro e persistência protegida dos tokens.
+O Sprint 0 — Fundação foi concluído. O projeto está no Sprint 1 — Acesso ao Bling, com OAuth 2.0 validado e renovação automática e atômica dos tokens.
 
 ## Decisões do MVP
 
@@ -83,6 +83,8 @@ Os valores reais devem ser cadastrados em **Configurações do projeto → Propr
 
 Para implantar o callback e realizar a primeira autorização, consulte [`docs/oauth-authorization.md`](docs/oauth-authorization.md).
 
+Para entender a renovação sob lock, o comportamento em falhas e a validação manual, consulte [`docs/token-renewal.md`](docs/token-renewal.md).
+
 Nunca envie ao GitHub:
 
 - `client_secret`;
@@ -106,6 +108,7 @@ Esse comando valida a estrutura, o manifesto e padrões comuns de vazamento de s
 - Configuração segura: PRA-8 / US-003 e PRA-48 / TT-003
 - Contratos da API do Bling: PRA-9 / US-004 e PRA-44 / TT-004
 - Autorização OAuth do Bling: PRA-11 / US-005 e PRA-47 / TT-005
+- Renovação automática dos tokens: PRA-12 / US-006 e PRA-46 / TT-006
 
 ## Referências oficiais
 
