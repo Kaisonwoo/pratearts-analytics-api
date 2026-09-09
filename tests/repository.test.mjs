@@ -317,3 +317,208 @@ test('OAuth trata recusa sem chamar o endpoint de token', async () => {
   assert.match(webAppSource, /renderAuthorizationCallback_/);
   assert.doesNotMatch(webAppSource, /BLING_CLIENT_SECRET|BLING_ACCESS_TOKEN|BLING_REFRESH_TOKEN/);
 });
+
+test('renovação usa lock, substitui o refresh token e evita POST duplicado', async () => {
+  const values = new Map([
+    ['BLING_CLIENT_ID', 'client-id-renovacao-teste'],
+    ['BLING_CLIENT_SECRET', 'client-secret-renovacao-teste'],
+    ['BLING_REDIRECT_URI', 'https://script.google.com/macros/s/deployment-teste/exec'],
+    ['BLING_ACCESS_TOKEN', 'access-token-expirado-teste'],
+    ['BLING_REFRESH_TOKEN', 'refresh-token-anterior-teste'],
+    ['BLING_TOKEN_EXPIRES_AT', String(Date.now() - 1000)]
+  ]);
+  const fetchCalls = [];
+  const lockEvents = [];
+  const setPropertiesCalls = [];
+  const logEntries = [];
+  const scriptProperties = {
+    getProperty: (key) => values.has(key) ? values.get(key) : null,
+    setProperties: (items) => {
+      setPropertiesCalls.push({ ...items });
+      Object.entries(items).forEach(([key, value]) => values.set(key, value));
+    },
+    deleteProperty: (key) => values.delete(key)
+  };
+  const context = vm.createContext({
+    PropertiesService: { getScriptProperties: () => scriptProperties },
+    LockService: {
+      getScriptLock: () => ({
+        waitLock: (milliseconds) => lockEvents.push(['wait', milliseconds]),
+        releaseLock: () => lockEvents.push(['release'])
+      })
+    },
+    Utilities: {
+      base64Encode: (value) => Buffer.from(value, 'utf8').toString('base64')
+    },
+    UrlFetchApp: {
+      fetch: (url, options) => {
+        fetchCalls.push({ url, options });
+        return {
+          getResponseCode: () => 200,
+          getContentText: () => JSON.stringify({
+            access_token: 'access-token-renovado-teste',
+            refresh_token: 'refresh-token-renovado-teste',
+            expires_in: 3600,
+            token_type: 'Bearer'
+          })
+        };
+      }
+    },
+    console: { log: (entry) => logEntries.push(JSON.parse(entry)) },
+    Date,
+    Number,
+    Object,
+    String,
+    Boolean,
+    JSON
+  });
+
+  for (const relative of [
+    'src/config/Config.gs',
+    'src/core/Logger.gs',
+    'src/config/Secrets.gs',
+    'src/services/OAuthService.gs'
+  ]) {
+    vm.runInContext(await readFile(path.join(root, relative), 'utf8'), context, { filename: relative });
+  }
+
+  const first = vm.runInContext('PRAOAuthService.refreshAccessToken(60)', context);
+  const second = vm.runInContext('PRAOAuthService.refreshAccessToken(60)', context);
+
+  assert.equal(first.ok, true);
+  assert.equal(first.refreshed, true);
+  assert.equal(first.code, 'token_refreshed');
+  assert.equal(second.ok, true);
+  assert.equal(second.refreshed, false);
+  assert.equal(second.code, 'token_still_valid');
+  assert.equal(fetchCalls.length, 1);
+  assert.equal(fetchCalls[0].url, 'https://bling.com.br/Api/v3/oauth/token');
+  assert.equal(fetchCalls[0].options.payload.grant_type, 'refresh_token');
+  assert.equal(fetchCalls[0].options.payload.refresh_token, 'refresh-token-anterior-teste');
+  assert.equal(fetchCalls[0].options.headers['enable-jwt'], '1');
+  assert.equal(
+    fetchCalls[0].options.headers.Authorization,
+    `Basic ${Buffer.from('client-id-renovacao-teste:client-secret-renovacao-teste').toString('base64')}`
+  );
+  assert.equal(setPropertiesCalls.length, 1);
+  assert.equal(values.get('BLING_ACCESS_TOKEN'), 'access-token-renovado-teste');
+  assert.equal(values.get('BLING_REFRESH_TOKEN'), 'refresh-token-renovado-teste');
+  assert.deepEqual(lockEvents, [
+    ['wait', 30000], ['release'],
+    ['wait', 30000], ['release']
+  ]);
+  assert.doesNotMatch(JSON.stringify([first, second, logEntries]), /(?:access|refresh|client)-token-.*-teste/);
+  assert.doesNotMatch(JSON.stringify([first, second, logEntries]), /client-secret-renovacao-teste/);
+});
+
+test('renovação preserva o refresh token anterior quando a resposta válida o omite', async () => {
+  const values = new Map([
+    ['BLING_ACCESS_TOKEN', 'access-token-expirado'],
+    ['BLING_REFRESH_TOKEN', 'refresh-token-vigente'],
+    ['BLING_TOKEN_EXPIRES_AT', String(Date.now() - 1000)]
+  ]);
+  const scriptProperties = {
+    getProperty: (key) => values.has(key) ? values.get(key) : null,
+    setProperties: (items) => Object.entries(items).forEach(([key, value]) => values.set(key, value)),
+    deleteProperty: (key) => values.delete(key)
+  };
+  const context = vm.createContext({
+    PropertiesService: { getScriptProperties: () => scriptProperties },
+    LockService: {
+      getScriptLock: () => ({ waitLock: () => {}, releaseLock: () => {} })
+    },
+    Date,
+    Number,
+    Object,
+    String,
+    Boolean
+  });
+
+  for (const relative of ['src/config/Config.gs', 'src/config/Secrets.gs']) {
+    vm.runInContext(await readFile(path.join(root, relative), 'utf8'), context, { filename: relative });
+  }
+
+  const result = vm.runInContext(`PRASecrets.refreshTokensAtomically(60, function () {
+    return {
+      access_token: 'access-token-novo',
+      expires_in: 3600,
+      token_type: 'Bearer'
+    };
+  })`, context);
+
+  assert.equal(result.refreshed, true);
+  assert.equal(values.get('BLING_ACCESS_TOKEN'), 'access-token-novo');
+  assert.equal(values.get('BLING_REFRESH_TOKEN'), 'refresh-token-vigente');
+});
+
+test('falha de renovação preserva o último estado e não registra segredos', async () => {
+  const original = {
+    accessToken: 'access-token-anterior-falha',
+    refreshToken: 'refresh-token-anterior-falha',
+    expiresAt: String(Date.now() - 1000)
+  };
+  const values = new Map([
+    ['BLING_CLIENT_ID', 'client-id-falha-teste'],
+    ['BLING_CLIENT_SECRET', 'client-secret-falha-teste'],
+    ['BLING_REDIRECT_URI', 'https://script.google.com/macros/s/deployment-teste/exec'],
+    ['BLING_ACCESS_TOKEN', original.accessToken],
+    ['BLING_REFRESH_TOKEN', original.refreshToken],
+    ['BLING_TOKEN_EXPIRES_AT', original.expiresAt]
+  ]);
+  const setPropertiesCalls = [];
+  const logEntries = [];
+  const scriptProperties = {
+    getProperty: (key) => values.has(key) ? values.get(key) : null,
+    setProperties: (items) => {
+      setPropertiesCalls.push({ ...items });
+      Object.entries(items).forEach(([key, value]) => values.set(key, value));
+    },
+    deleteProperty: (key) => values.delete(key)
+  };
+  const context = vm.createContext({
+    PropertiesService: { getScriptProperties: () => scriptProperties },
+    LockService: {
+      getScriptLock: () => ({ waitLock: () => {}, releaseLock: () => {} })
+    },
+    Utilities: {
+      base64Encode: (value) => Buffer.from(value, 'utf8').toString('base64')
+    },
+    UrlFetchApp: {
+      fetch: () => ({
+        getResponseCode: () => 400,
+        getContentText: () => JSON.stringify({
+          error: 'invalid_grant',
+          detail: 'refresh-token-anterior-falha'
+        })
+      })
+    },
+    console: { log: (entry) => logEntries.push(JSON.parse(entry)) },
+    Date,
+    Number,
+    Object,
+    String,
+    Boolean,
+    JSON
+  });
+
+  for (const relative of [
+    'src/config/Config.gs',
+    'src/core/Logger.gs',
+    'src/config/Secrets.gs',
+    'src/services/OAuthService.gs'
+  ]) {
+    vm.runInContext(await readFile(path.join(root, relative), 'utf8'), context, { filename: relative });
+  }
+
+  const result = vm.runInContext('PRAOAuthService.refreshAccessToken(60)', context);
+
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'refresh_failed');
+  assert.equal(setPropertiesCalls.length, 0);
+  assert.equal(values.get('BLING_ACCESS_TOKEN'), original.accessToken);
+  assert.equal(values.get('BLING_REFRESH_TOKEN'), original.refreshToken);
+  assert.equal(values.get('BLING_TOKEN_EXPIRES_AT'), original.expiresAt);
+  assert.doesNotMatch(JSON.stringify([result, logEntries]), /access-token-anterior-falha/);
+  assert.doesNotMatch(JSON.stringify([result, logEntries]), /refresh-token-anterior-falha/);
+  assert.doesNotMatch(JSON.stringify([result, logEntries]), /client-secret-falha-teste/);
+});
