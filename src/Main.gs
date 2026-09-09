@@ -15,6 +15,15 @@ function getBlingAuthorizationUrl() {
 }
 
 /**
+ * Renova o access token somente quando a validade restante está abaixo
+ * da margem segura. A resposta contém apenas indicadores públicos.
+ * @return {Object} Resultado seguro da renovação.
+ */
+function refreshBlingAccessToken() {
+  return PRABlingClient.refreshAuthentication();
+}
+
+/**
  * Ponto de entrada do gatilho diário. A sincronização será implementada
  * nas histórias de coleta; por enquanto retorna um estado explícito.
  * @return {Object} Resultado do disparo.
