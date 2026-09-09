@@ -7,6 +7,11 @@ var PRASecrets = (function () {
     PRAConfig.KEYS.BLING_TOKEN_EXPIRES_AT
   ]);
 
+  var OAUTH_STATE_KEYS = Object.freeze([
+    PRAConfig.KEYS.BLING_OAUTH_STATE_HASH,
+    PRAConfig.KEYS.BLING_OAUTH_STATE_EXPIRES_AT
+  ]);
+
   function properties_() {
     return PropertiesService.getScriptProperties();
   }
@@ -106,12 +111,67 @@ var PRASecrets = (function () {
     return getTokenStatus();
   }
 
+  function constantTimeEquals_(left, right) {
+    var a = String(left || '');
+    var b = String(right || '');
+    var difference = a.length ^ b.length;
+    var length = Math.max(a.length, b.length);
+
+    for (var index = 0; index < length; index += 1) {
+      difference |= (a.charCodeAt(index % Math.max(a.length, 1)) || 0) ^
+        (b.charCodeAt(index % Math.max(b.length, 1)) || 0);
+    }
+    return difference === 0;
+  }
+
+  function saveOAuthState(stateHash, expiresAt) {
+    var expiration = Number(expiresAt);
+    if (typeof stateHash !== 'string' || !stateHash) {
+      throw new Error('Estado OAuth inválido: hash ausente.');
+    }
+    if (!Number.isFinite(expiration) || expiration <= Date.now()) {
+      throw new Error('Estado OAuth inválido: expiração inválida.');
+    }
+
+    var values = {};
+    values[PRAConfig.KEYS.BLING_OAUTH_STATE_HASH] = stateHash;
+    values[PRAConfig.KEYS.BLING_OAUTH_STATE_EXPIRES_AT] = String(expiration);
+    withLock_(function () {
+      properties_().setProperties(values, false);
+    });
+  }
+
+  function consumeOAuthState(candidateHash) {
+    return withLock_(function () {
+      var props = properties_();
+      var expectedHash = props.getProperty(PRAConfig.KEYS.BLING_OAUTH_STATE_HASH);
+      var expiresAt = Number(props.getProperty(PRAConfig.KEYS.BLING_OAUTH_STATE_EXPIRES_AT) || 0);
+
+      OAUTH_STATE_KEYS.forEach(function (key) {
+        props.deleteProperty(key);
+      });
+
+      if (!expectedHash || !expiresAt) {
+        return { valid: false, reason: 'missing' };
+      }
+      if (expiresAt <= Date.now()) {
+        return { valid: false, reason: 'expired' };
+      }
+      if (!constantTimeEquals_(expectedHash, candidateHash)) {
+        return { valid: false, reason: 'mismatch' };
+      }
+      return { valid: true, reason: null };
+    });
+  }
+
   return Object.freeze({
     getClientCredentials: getClientCredentials,
     getTokenSnapshot: getTokenSnapshot,
     getTokenStatus: getTokenStatus,
     hasUsableAccessToken: hasUsableAccessToken,
     saveTokenResponse: saveTokenResponse,
-    clearTokens: clearTokens
+    clearTokens: clearTokens,
+    saveOAuthState: saveOAuthState,
+    consumeOAuthState: consumeOAuthState
   });
 })();

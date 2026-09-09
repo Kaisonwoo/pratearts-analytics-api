@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import vm from 'node:vm';
+import { createHash } from 'node:crypto';
 
 const root = path.resolve(import.meta.dirname, '..');
 
@@ -206,4 +207,113 @@ test('payloads de contrato não contêm padrões comuns de dados sensíveis', as
       assert.doesNotMatch(content, pattern, `Possível dado sensível encontrado em ${sample}`);
     }
   }
+});
+
+test('OAuth cria state temporário, troca o código por JWT e bloqueia replay', async () => {
+  const values = new Map([
+    ['BLING_CLIENT_ID', 'client-id-publico-de-teste'],
+    ['BLING_CLIENT_SECRET', 'client-secret-privado-de-teste'],
+    ['BLING_REDIRECT_URI', 'https://script.google.com/macros/s/deployment-teste/exec']
+  ]);
+  const fetchCalls = [];
+  const scriptProperties = {
+    getProperty: (key) => values.has(key) ? values.get(key) : null,
+    setProperties: (items) => Object.entries(items).forEach(([key, value]) => values.set(key, value)),
+    deleteProperty: (key) => values.delete(key)
+  };
+  let uuidSequence = 0;
+  const context = vm.createContext({
+    PropertiesService: { getScriptProperties: () => scriptProperties },
+    LockService: {
+      getScriptLock: () => ({ waitLock: () => {}, releaseLock: () => {} })
+    },
+    Utilities: {
+      DigestAlgorithm: { SHA_256: 'SHA_256' },
+      Charset: { UTF_8: 'UTF_8' },
+      getUuid: () => `00000000-0000-4000-8000-${String(++uuidSequence).padStart(12, '0')}`,
+      computeDigest: (_algorithm, value) => [...createHash('sha256').update(value, 'utf8').digest()],
+      base64EncodeWebSafe: (bytes) => Buffer.from(bytes).toString('base64url'),
+      base64Encode: (value) => Buffer.from(value, 'utf8').toString('base64')
+    },
+    UrlFetchApp: {
+      fetch: (url, options) => {
+        fetchCalls.push({ url, options });
+        return {
+          getResponseCode: () => 200,
+          getContentText: () => JSON.stringify({
+            access_token: 'jwt-access-token-sintetico',
+            refresh_token: 'jwt-refresh-token-sintetico',
+            expires_in: 3600,
+            token_type: 'Bearer'
+          })
+        };
+      }
+    },
+    PRALogger: { warn: () => {}, error: () => {} },
+    Date,
+    Number,
+    Object,
+    String,
+    Boolean,
+    JSON,
+    encodeURIComponent
+  });
+
+  for (const relative of [
+    'src/config/Config.gs',
+    'src/config/Secrets.gs',
+    'src/services/OAuthService.gs'
+  ]) {
+    vm.runInContext(await readFile(path.join(root, relative), 'utf8'), context, { filename: relative });
+  }
+
+  const request = vm.runInContext('PRAOAuthService.createAuthorizationRequest()', context);
+  const authorizationUrl = new URL(request.authorizationUrl);
+  const state = authorizationUrl.searchParams.get('state');
+
+  assert.equal(authorizationUrl.origin, 'https://bling.com.br');
+  assert.equal(authorizationUrl.pathname, '/Api/v3/oauth/authorize');
+  assert.equal(authorizationUrl.searchParams.get('response_type'), 'code');
+  assert.equal(authorizationUrl.searchParams.get('client_id'), 'client-id-publico-de-teste');
+  assert.ok(state.length >= 64);
+  assert.notEqual(values.get('BLING_OAUTH_STATE_HASH'), state);
+  assert.ok(Number(values.get('BLING_OAUTH_STATE_EXPIRES_AT')) > Date.now());
+  assert.doesNotMatch(request.authorizationUrl, /client-secret-privado-de-teste/);
+
+  context.callbackInput = { state, code: 'authorization-code-sintetico' };
+  const result = vm.runInContext('PRAOAuthService.handleCallback(callbackInput)', context);
+  assert.equal(result.ok, true);
+  assert.equal(result.code, 'authorized');
+  assert.equal(fetchCalls.length, 1);
+  assert.equal(fetchCalls[0].url, 'https://bling.com.br/Api/v3/oauth/token');
+  assert.equal(fetchCalls[0].options.method, 'post');
+  assert.equal(fetchCalls[0].options.contentType, 'application/x-www-form-urlencoded');
+  assert.equal(fetchCalls[0].options.headers['enable-jwt'], '1');
+  assert.equal(fetchCalls[0].options.payload.grant_type, 'authorization_code');
+  assert.equal(fetchCalls[0].options.payload.code, 'authorization-code-sintetico');
+  assert.equal(
+    fetchCalls[0].options.headers.Authorization,
+    `Basic ${Buffer.from('client-id-publico-de-teste:client-secret-privado-de-teste').toString('base64')}`
+  );
+  assert.equal(values.get('BLING_ACCESS_TOKEN'), 'jwt-access-token-sintetico');
+  assert.equal(values.get('BLING_REFRESH_TOKEN'), 'jwt-refresh-token-sintetico');
+  assert.equal(values.has('BLING_OAUTH_STATE_HASH'), false);
+  assert.doesNotMatch(JSON.stringify(result), /jwt-(?:access|refresh)-token-sintetico/);
+
+  const replay = vm.runInContext('PRAOAuthService.handleCallback(callbackInput)', context);
+  assert.equal(replay.ok, false);
+  assert.equal(replay.code, 'invalid_state');
+  assert.equal(fetchCalls.length, 1);
+});
+
+test('OAuth trata recusa sem chamar o endpoint de token', async () => {
+  const oauthSource = await readFile(path.join(root, 'src/services/OAuthService.gs'), 'utf8');
+  const webAppSource = await readFile(path.join(root, 'src/api/WebApp.gs'), 'utf8');
+
+  assert.match(oauthSource, /authorization_denied/);
+  assert.match(oauthSource, /Nenhum token foi armazenado/);
+  assert.match(oauthSource, /consumeOAuthState/);
+  assert.match(webAppSource, /parameters\.action === 'authorize'/);
+  assert.match(webAppSource, /renderAuthorizationCallback_/);
+  assert.doesNotMatch(webAppSource, /BLING_CLIENT_SECRET|BLING_ACCESS_TOKEN|BLING_REFRESH_TOKEN/);
 });

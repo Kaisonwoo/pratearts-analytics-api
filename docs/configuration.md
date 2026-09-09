@@ -18,6 +18,8 @@
 | `BLING_ACCESS_TOKEN` | Após OAuth | Sim | Autoriza chamadas à API. |
 | `BLING_REFRESH_TOKEN` | Após OAuth | Sim | Renova o acesso sem nova autorização manual. |
 | `BLING_TOKEN_EXPIRES_AT` | Após OAuth | Não | Expiração do access token em Unix epoch, milissegundos. |
+| `BLING_OAUTH_STATE_HASH` | Gerenciada | Sim | Hash SHA-256 temporário usado para validar o callback. |
+| `BLING_OAUTH_STATE_EXPIRES_AT` | Gerenciada | Não | Expiração do link de autorização, em Unix epoch. |
 | `BLING_STATUS_ATENDIDO_ID` | Antes da coleta | Não | ID técnico da situação válida de venda. |
 | `DATA_SPREADSHEET_ID` | Antes da persistência | Não | Identifica a base de dados do MVP. |
 | `SYNC_TIMEZONE` | Não | Não | Padrão: `America/Sao_Paulo`. |
@@ -39,6 +41,7 @@
 - As credenciais do aplicativo são enviadas por HTTP Basic no endpoint de token, nunca no corpo.
 - O header `enable-jwt: 1` será usado na obtenção, renovação e consumo dos tokens.
 - O `state` deverá ser aleatório, validado e consumido uma única vez para proteção contra CSRF.
+- Somente o hash do `state` é persistido e sua validade é de 10 minutos.
 - O refresh token possui vida útil superior ao access token; a documentação atual informa 30 dias.
 
 Referências oficiais:
@@ -57,3 +60,5 @@ O health check pode retornar:
 - estado geral `configured` e `authenticated`.
 
 Ele nunca retorna Client ID, Client Secret, access token ou refresh token.
+
+O passo a passo completo de implantação e primeira autorização está em [`oauth-authorization.md`](oauth-authorization.md).
