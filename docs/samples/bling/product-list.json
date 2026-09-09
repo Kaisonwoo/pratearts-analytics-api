@@ -1,0 +1,36 @@
+{
+  "data": [
+    {
+      "id": 92000001,
+      "idProdutoPai": 0,
+      "nome": "JOIA EXEMPLO",
+      "codigo": "SKU-EXEMPLO-PAI",
+      "preco": 129.9,
+      "precoCusto": 42.5,
+      "estoque": {
+        "saldoVirtualTotal": 15
+      },
+      "tipo": "P",
+      "situacao": "A",
+      "formato": "V",
+      "descricaoCurta": "PRODUTO PAI SINTETICO",
+      "imagemURL": "https://example.invalid/produto-pai.jpg"
+    },
+    {
+      "id": 92000002,
+      "idProdutoPai": 92000001,
+      "nome": "JOIA EXEMPLO - AZUL",
+      "codigo": "SKU-EXEMPLO-FILHO-AZUL",
+      "preco": 129.9,
+      "precoCusto": 42.5,
+      "estoque": {
+        "saldoVirtualTotal": 8
+      },
+      "tipo": "P",
+      "situacao": "A",
+      "formato": "S",
+      "descricaoCurta": "VARIACAO SINTETICA",
+      "imagemURL": "https://example.invalid/produto-filho-azul.jpg"
+    }
+  ]
+}

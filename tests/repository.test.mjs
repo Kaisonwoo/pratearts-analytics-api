@@ -15,6 +15,10 @@ async function listGsFiles(directory) {
   return nested.flat().filter((file) => file.endsWith('.gs'));
 }
 
+async function readJson(relative) {
+  return JSON.parse(await readFile(path.join(root, relative), 'utf8'));
+}
+
 test('manifesto usa V8, logging e fuso aprovados', async () => {
   const manifest = JSON.parse(await readFile(path.join(root, 'src/appsscript.json'), 'utf8'));
   assert.equal(manifest.runtimeVersion, 'V8');
@@ -106,4 +110,100 @@ test('diagnóstico público não expõe credenciais ou tokens', async () => {
   assert.doesNotMatch(serializedPublicSnapshot, /access-token-de-teste/);
   assert.doesNotMatch(serializedPublicSnapshot, /refresh-token-de-teste/);
   assert.equal(publicSnapshot.validation.valid, true);
+});
+
+test('matriz do Bling cobre os contratos obrigatórios usando somente leitura', async () => {
+  const model = await readJson('config/bling-read-model.json');
+  const resources = new Map(model.resources.map((resource) => [resource.key, resource]));
+  const expected = new Map([
+    ['salesOrders', '/pedidos/vendas'],
+    ['salesOrderDetail', '/pedidos/vendas/{idPedidoVenda}'],
+    ['products', '/produtos'],
+    ['productDetail', '/produtos/{idProduto}'],
+    ['productVariations', '/produtos/variacoes/{idProdutoPai}'],
+    ['productSuppliers', '/produtos/fornecedores'],
+    ['stockBalances', '/estoques/saldos'],
+    ['situationModules', '/situacoes/modulos'],
+    ['moduleSituations', '/situacoes/modulos/{idModuloSistema}']
+  ]);
+
+  assert.equal(model.source.apiVersion, '3.0');
+  assert.equal(model.defaults.responseEnvelope, 'data');
+  assert.equal(model.defaults.readOnly, true);
+  assert.equal(model.businessRules.validSaleSituation, 'Atendido');
+
+  for (const [key, endpoint] of expected) {
+    assert.ok(resources.has(key), `Recurso obrigatório ausente: ${key}`);
+    assert.equal(resources.get(key).path, endpoint);
+  }
+
+  for (const resource of model.resources) {
+    assert.equal(resource.method, 'GET', `${resource.key} deve permanecer somente leitura`);
+  }
+
+  assert.ok(resources.get('salesOrders').filters.includes('dataAlteracaoInicial'));
+  assert.ok(resources.get('salesOrders').filters.includes('idsSituacoes[]'));
+  assert.ok(resources.get('salesOrderDetail').itemFields.includes('itens[].produto.id'));
+  assert.ok(resources.get('products').keyFields.includes('idProdutoPai'));
+  assert.ok(resources.get('products').keyFields.includes('codigo'));
+  assert.ok(resources.get('productSuppliers').keyFields.includes('fornecedor.id'));
+});
+
+test('payloads sintéticos preservam IDs, SKU, pai/filho e fornecedor', async () => {
+  const orderList = await readJson('docs/samples/bling/sales-order-list.json');
+  const orderDetail = await readJson('docs/samples/bling/sales-order-detail.json');
+  const productList = await readJson('docs/samples/bling/product-list.json');
+  const productDetail = await readJson('docs/samples/bling/product-detail-with-variations.json');
+  const supplierLinks = await readJson('docs/samples/bling/product-supplier-list.json');
+  const stock = await readJson('docs/samples/bling/stock-balance.json');
+  const situations = await readJson('docs/samples/bling/situations.json');
+
+  const parent = productList.data.find((product) => product.idProdutoPai === 0);
+  const child = productList.data.find((product) => product.idProdutoPai === parent.id);
+  const item = orderDetail.data.itens[0];
+  const supplierLink = supplierLinks.data[0];
+  const balance = stock.data[0];
+
+  assert.equal(orderList.data[0].id, orderDetail.data.id);
+  assert.equal(orderList.data[0].situacao.id, situations.situations.data[0].id);
+  assert.equal(situations.situations.data[0].nome, 'Atendido');
+  assert.equal(item.produto.id, child.id);
+  assert.equal(item.codigo, child.codigo);
+  assert.equal(productDetail.data.id, parent.id);
+  assert.equal(productDetail.data.variacoes[0].id, child.id);
+  assert.equal(productDetail.data.variacoes[0].variacao.produtoPai.id, parent.id);
+  assert.equal(supplierLink.produto.id, child.id);
+  assert.equal(supplierLink.padrao, true);
+  assert.equal(balance.produto.id, child.id);
+  assert.equal(balance.produto.codigo, child.codigo);
+});
+
+test('payloads de contrato não contêm padrões comuns de dados sensíveis', async () => {
+  const samples = [
+    'product-detail-with-variations.json',
+    'product-list.json',
+    'product-supplier-list.json',
+    'sales-order-detail.json',
+    'sales-order-list.json',
+    'situations.json',
+    'stock-balance.json'
+  ];
+  const forbiddenPatterns = [
+    /[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/,
+    /\b\d{3}\.\d{3}\.\d{3}-\d{2}\b/,
+    /\b\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\b/,
+    /\b\d{11}\b/,
+    /\b\d{14}\b/,
+    /Bearer\s+[A-Za-z0-9._-]{20,}/,
+    /eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/
+  ];
+
+  for (const sample of samples) {
+    const content = await readFile(path.join(root, 'docs/samples/bling', sample), 'utf8');
+    const payload = JSON.parse(content);
+    assert.ok('data' in payload || ('modules' in payload && 'situations' in payload));
+    for (const pattern of forbiddenPatterns) {
+      assert.doesNotMatch(content, pattern, `Possível dado sensível encontrado em ${sample}`);
+    }
+  }
 });

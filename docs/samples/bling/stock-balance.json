@@ -1,0 +1,21 @@
+{
+  "data": [
+    {
+      "produto": {
+        "id": 92000002,
+        "codigo": "SKU-EXEMPLO-FILHO-AZUL"
+      },
+      "saldoFisicoTotal": 10,
+      "saldoVirtualTotal": 8,
+      "depositos": [
+        {
+          "deposito": {
+            "id": 95000001
+          },
+          "saldoFisico": 10,
+          "saldoVirtual": 8
+        }
+      ]
+    }
+  ]
+}

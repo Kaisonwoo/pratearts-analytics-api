@@ -1,0 +1,18 @@
+{
+  "data": [
+    {
+      "id": 93001001,
+      "descricao": "VINCULO SINTETICO",
+      "codigo": "FORN-SKU-EXEMPLO-AZUL",
+      "precoCusto": 42.5,
+      "precoCompra": 40,
+      "padrao": true,
+      "produto": {
+        "id": 92000002
+      },
+      "fornecedor": {
+        "id": 93000001
+      }
+    }
+  ]
+}

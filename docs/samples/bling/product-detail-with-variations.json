@@ -1,0 +1,51 @@
+{
+  "data": {
+    "id": 92000001,
+    "nome": "JOIA EXEMPLO",
+    "codigo": "SKU-EXEMPLO-PAI",
+    "preco": 129.9,
+    "tipo": "P",
+    "situacao": "A",
+    "formato": "V",
+    "descricaoCurta": "PRODUTO PAI SINTETICO",
+    "unidade": "UN",
+    "pesoLiquido": 0.01,
+    "pesoBruto": 0.02,
+    "marca": "MARCA EXEMPLO",
+    "categoria": {
+      "id": 92001001
+    },
+    "estoque": {
+      "minimo": 3,
+      "maximo": 30,
+      "crossdocking": 0,
+      "localizacao": "LOCAL-EXEMPLO"
+    },
+    "fornecedor": {
+      "contato": {
+        "id": 93000001
+      },
+      "codigo": "FORN-SKU-EXEMPLO",
+      "precoCusto": 42.5,
+      "precoCompra": 40
+    },
+    "variacoes": [
+      {
+        "id": 92000002,
+        "nome": "JOIA EXEMPLO - AZUL",
+        "codigo": "SKU-EXEMPLO-FILHO-AZUL",
+        "preco": 129.9,
+        "tipo": "P",
+        "situacao": "A",
+        "formato": "S",
+        "variacao": {
+          "nome": "COR:AZUL",
+          "ordem": 1,
+          "produtoPai": {
+            "id": 92000001
+          }
+        }
+      }
+    ]
+  }
+}

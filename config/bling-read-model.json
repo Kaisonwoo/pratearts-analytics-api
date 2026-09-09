@@ -1,0 +1,352 @@
+{
+  "source": {
+    "name": "Bling API v3 OpenAPI",
+    "referenceUrl": "https://developer.bling.com.br/referencia",
+    "openApiUrl": "https://developer.bling.com.br/build/assets/openapi-DKXp8d1e.json",
+    "openapi": "3.0.0",
+    "apiVersion": "3.0",
+    "baseUrl": "https://api.bling.com.br/Api/v3",
+    "verifiedAt": "2026-09-09"
+  },
+  "defaults": {
+    "responseEnvelope": "data",
+    "readOnly": true,
+    "pagination": {
+      "pageParameter": "pagina",
+      "limitParameter": "limite",
+      "defaultLimit": 100
+    }
+  },
+  "businessRules": {
+    "validSaleSituation": "Atendido",
+    "validSaleSituationResolution": "Resolver o ID na conta com GET /situacoes/modulos e GET /situacoes/modulos/{idModuloSistema}; nunca fixar o ID da amostra.",
+    "orderReferenceDate": "data",
+    "productIdentifier": "id",
+    "skuField": "codigo",
+    "parentProductField": "idProdutoPai"
+  },
+  "resources": [
+    {
+      "key": "salesOrders",
+      "method": "GET",
+      "path": "/pedidos/vendas",
+      "requiredForMvp": true,
+      "paginated": true,
+      "syncStrategy": "incremental",
+      "filters": [
+        "pagina",
+        "limite",
+        "idContato",
+        "idsSituacoes[]",
+        "dataInicial",
+        "dataFinal",
+        "dataAlteracaoInicial",
+        "dataAlteracaoFinal",
+        "dataPrevistaInicial",
+        "dataPrevistaFinal",
+        "numero",
+        "idLoja",
+        "idVendedor",
+        "idControleCaixa",
+        "numerosLojas[]",
+        "idUnidadeNegocio"
+      ],
+      "responseSchemas": [
+        "VendasDadosBaseDTO"
+      ],
+      "keyFields": [
+        "id",
+        "numero",
+        "numeroLoja",
+        "data",
+        "dataSaida",
+        "dataPrevista",
+        "totalProdutos",
+        "total",
+        "contato.id",
+        "situacao.id",
+        "loja.id"
+      ]
+    },
+    {
+      "key": "salesOrderDetail",
+      "method": "GET",
+      "path": "/pedidos/vendas/{idPedidoVenda}",
+      "requiredForMvp": true,
+      "paginated": false,
+      "syncStrategy": "detailById",
+      "responseSchemas": [
+        "VendasDadosBaseDTO",
+        "VendasDadosDTO"
+      ],
+      "keyFields": [
+        "id",
+        "numero",
+        "numeroPedidoCompra",
+        "outrasDespesas",
+        "observacoes",
+        "desconto",
+        "categoria.id",
+        "notaFiscal.id",
+        "itens[]",
+        "parcelas[]",
+        "transporte",
+        "vendedor.id",
+        "intermediador",
+        "taxas"
+      ],
+      "itemFields": [
+        "itens[].id",
+        "itens[].codigo",
+        "itens[].unidade",
+        "itens[].quantidade",
+        "itens[].desconto",
+        "itens[].valor",
+        "itens[].descricao",
+        "itens[].produto.id"
+      ],
+      "relationships": [
+        {
+          "from": "itens[].produto.id",
+          "to": "products.id",
+          "purpose": "Vincular cada item ao cadastro atual do produto"
+        },
+        {
+          "from": "itens[].codigo",
+          "to": "products.codigo",
+          "purpose": "Preservar o SKU registrado no pedido"
+        }
+      ]
+    },
+    {
+      "key": "products",
+      "method": "GET",
+      "path": "/produtos",
+      "requiredForMvp": true,
+      "paginated": true,
+      "syncStrategy": "fullReconciliation",
+      "filters": [
+        "pagina",
+        "limite",
+        "criterio"
+      ],
+      "responseSchemas": [
+        "ProdutosDadosBaseDTO"
+      ],
+      "keyFields": [
+        "id",
+        "idProdutoPai",
+        "nome",
+        "codigo",
+        "preco",
+        "precoCusto",
+        "estoque",
+        "tipo",
+        "situacao",
+        "formato",
+        "descricaoCurta",
+        "imagemURL"
+      ],
+      "enumValues": {
+        "formato": {
+          "S": "Simples",
+          "V": "Com variações",
+          "E": "Composição"
+        }
+      }
+    },
+    {
+      "key": "productDetail",
+      "method": "GET",
+      "path": "/produtos/{idProduto}",
+      "requiredForMvp": true,
+      "paginated": false,
+      "syncStrategy": "detailById",
+      "responseSchemas": [
+        "ProdutosDadosBaseDTO_GetByID",
+        "ProdutosDados",
+        "ProdutosDadosDTO"
+      ],
+      "keyFields": [
+        "id",
+        "nome",
+        "codigo",
+        "unidade",
+        "preco",
+        "precoCusto",
+        "situacao",
+        "formato",
+        "categoria.id",
+        "estoque",
+        "fornecedor",
+        "variacoes[]"
+      ]
+    },
+    {
+      "key": "productVariations",
+      "method": "GET",
+      "path": "/produtos/variacoes/{idProdutoPai}",
+      "requiredForMvp": true,
+      "paginated": false,
+      "syncStrategy": "detailByParentId",
+      "responseSchemas": [
+        "ProdutosDadosDTO"
+      ],
+      "keyFields": [
+        "id",
+        "formato",
+        "variacoes[].id",
+        "variacoes[].codigo",
+        "variacoes[].variacao.nome",
+        "variacoes[].variacao.ordem",
+        "variacoes[].variacao.produtoPai.id"
+      ],
+      "relationships": [
+        {
+          "from": "products.idProdutoPai",
+          "to": "products.id",
+          "purpose": "Relacionar o filho ao produto pai"
+        },
+        {
+          "from": "variacoes[].variacao.produtoPai.id",
+          "to": "productVariations.id",
+          "purpose": "Confirmar o pai retornado no detalhe com variações"
+        }
+      ]
+    },
+    {
+      "key": "productSuppliers",
+      "method": "GET",
+      "path": "/produtos/fornecedores",
+      "requiredForMvp": true,
+      "paginated": true,
+      "syncStrategy": "fullReconciliation",
+      "filters": [
+        "pagina",
+        "limite",
+        "idProduto",
+        "idFornecedor"
+      ],
+      "responseSchemas": [
+        "ProdutosFornecedoresDadosBaseDTO"
+      ],
+      "keyFields": [
+        "id",
+        "descricao",
+        "codigo",
+        "precoCusto",
+        "precoCompra",
+        "padrao",
+        "produto.id",
+        "fornecedor.id"
+      ],
+      "relationships": [
+        {
+          "from": "produto.id",
+          "to": "products.id",
+          "purpose": "Agrupar vendas pelo fornecedor do produto"
+        }
+      ]
+    },
+    {
+      "key": "productSupplierDetail",
+      "method": "GET",
+      "path": "/produtos/fornecedores/{idProdutoFornecedor}",
+      "requiredForMvp": false,
+      "paginated": false,
+      "syncStrategy": "onDemand",
+      "responseSchemas": [
+        "ProdutosFornecedoresDadosBaseDTO",
+        "ProdutosFornecedoresDadosDTO"
+      ],
+      "keyFields": [
+        "id",
+        "garantia",
+        "produto.id",
+        "fornecedor.id"
+      ]
+    },
+    {
+      "key": "stockBalances",
+      "method": "GET",
+      "path": "/estoques/saldos",
+      "requiredForMvp": true,
+      "paginated": false,
+      "syncStrategy": "batchByProductIds",
+      "filters": [
+        "idsProdutos[]",
+        "codigos[]",
+        "filtroSaldoEstoque"
+      ],
+      "responseSchemas": [
+        "EstoquesSaldosBaseDTO",
+        "EstoquesSaldosDTO"
+      ],
+      "keyFields": [
+        "produto.id",
+        "produto.codigo",
+        "saldoFisicoTotal",
+        "saldoVirtualTotal",
+        "depositos[].deposito.id",
+        "depositos[].saldoFisico",
+        "depositos[].saldoVirtual"
+      ]
+    },
+    {
+      "key": "stockByDeposit",
+      "method": "GET",
+      "path": "/estoques/saldos/{idDeposito}",
+      "requiredForMvp": false,
+      "paginated": false,
+      "syncStrategy": "onDemand",
+      "filters": [
+        "idsProdutos[]",
+        "codigos[]",
+        "filtroSaldoEstoque"
+      ],
+      "responseSchemas": [
+        "EstoquesSaldosBaseDTO"
+      ],
+      "keyFields": [
+        "produto.id",
+        "produto.codigo",
+        "saldoFisicoTotal",
+        "saldoVirtualTotal"
+      ]
+    },
+    {
+      "key": "situationModules",
+      "method": "GET",
+      "path": "/situacoes/modulos",
+      "requiredForMvp": true,
+      "paginated": false,
+      "syncStrategy": "configurationDiscovery",
+      "responseSchemas": [
+        "SituacoesModuloDTO"
+      ],
+      "keyFields": [
+        "id",
+        "nome",
+        "descricao",
+        "criarSituacoes"
+      ]
+    },
+    {
+      "key": "moduleSituations",
+      "method": "GET",
+      "path": "/situacoes/modulos/{idModuloSistema}",
+      "requiredForMvp": true,
+      "paginated": false,
+      "syncStrategy": "configurationDiscovery",
+      "responseSchemas": [
+        "SituacoesDTO"
+      ],
+      "keyFields": [
+        "id",
+        "nome",
+        "idHerdado",
+        "cor"
+      ]
+    }
+  ]
+}
