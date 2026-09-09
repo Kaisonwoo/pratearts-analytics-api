@@ -8,6 +8,8 @@ var PRAConfig = (function () {
     BLING_ACCESS_TOKEN: 'BLING_ACCESS_TOKEN',
     BLING_REFRESH_TOKEN: 'BLING_REFRESH_TOKEN',
     BLING_TOKEN_EXPIRES_AT: 'BLING_TOKEN_EXPIRES_AT',
+    BLING_OAUTH_STATE_HASH: 'BLING_OAUTH_STATE_HASH',
+    BLING_OAUTH_STATE_EXPIRES_AT: 'BLING_OAUTH_STATE_EXPIRES_AT',
     BLING_STATUS_ATENDIDO_ID: 'BLING_STATUS_ATENDIDO_ID',
     DATA_SPREADSHEET_ID: 'DATA_SPREADSHEET_ID',
     SYNC_TIMEZONE: 'SYNC_TIMEZONE',
@@ -16,24 +18,31 @@ var PRAConfig = (function () {
 
   var DEFAULTS = Object.freeze({
     API_BASE_URL: 'https://api.bling.com.br/Api/v3',
-    AUTHORIZATION_URL: 'https://www.bling.com.br/Api/v3/oauth/authorize',
-    TOKEN_URL: 'https://www.bling.com.br/Api/v3/oauth/token',
+    AUTHORIZATION_URL: 'https://bling.com.br/Api/v3/oauth/authorize',
+    TOKEN_URL: 'https://bling.com.br/Api/v3/oauth/token',
     SYNC_TIMEZONE: 'America/Sao_Paulo',
     SYNC_HOUR: '6',
-    TOKEN_MIN_VALIDITY_SECONDS: 60
+    TOKEN_MIN_VALIDITY_SECONDS: 60,
+    OAUTH_STATE_TTL_SECONDS: 600
   });
 
   var SENSITIVE_KEYS = Object.freeze([
     KEYS.BLING_CLIENT_ID,
     KEYS.BLING_CLIENT_SECRET,
     KEYS.BLING_ACCESS_TOKEN,
-    KEYS.BLING_REFRESH_TOKEN
+    KEYS.BLING_REFRESH_TOKEN,
+    KEYS.BLING_OAUTH_STATE_HASH
   ]);
 
   var OAUTH_SETUP_KEYS = Object.freeze([
     KEYS.BLING_CLIENT_ID,
     KEYS.BLING_CLIENT_SECRET,
     KEYS.BLING_REDIRECT_URI
+  ]);
+
+  var INTERNAL_KEYS = Object.freeze([
+    KEYS.BLING_OAUTH_STATE_HASH,
+    KEYS.BLING_OAUTH_STATE_EXPIRES_AT
   ]);
 
   function properties_() {
@@ -88,7 +97,9 @@ var PRAConfig = (function () {
     var present = {};
     Object.keys(KEYS).forEach(function (name) {
       var key = KEYS[name];
-      present[key] = Boolean(props.getProperty(key));
+      if (INTERNAL_KEYS.indexOf(key) < 0) {
+        present[key] = Boolean(props.getProperty(key));
+      }
     });
 
     return {

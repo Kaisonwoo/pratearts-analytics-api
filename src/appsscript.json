@@ -9,6 +9,7 @@
   ],
   "urlFetchWhitelist": [
     "https://api.bling.com.br/",
+    "https://bling.com.br/",
     "https://www.bling.com.br/"
   ]
 }

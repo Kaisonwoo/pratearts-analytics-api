@@ -12,6 +12,7 @@ const requiredFiles = [
   'config/script-properties.example.json',
   'docs/adr/ADR-001-decisoes-fundacao.md',
   'docs/bling-api-mapping.md',
+  'docs/oauth-authorization.md',
   'docs/samples/bling/product-detail-with-variations.json',
   'docs/samples/bling/product-list.json',
   'docs/samples/bling/product-supplier-list.json',
@@ -23,7 +24,8 @@ const requiredFiles = [
   'src/Main.gs',
   'src/config/Config.gs',
   'src/config/Secrets.gs',
-  'src/core/Logger.gs'
+  'src/core/Logger.gs',
+  'src/services/OAuthService.gs'
 ];
 
 for (const relative of requiredFiles) {
@@ -35,6 +37,7 @@ assert.equal(manifest.runtimeVersion, 'V8');
 assert.equal(manifest.timeZone, 'America/Sao_Paulo');
 assert.equal(manifest.exceptionLogging, 'STACKDRIVER');
 assert.ok(manifest.oauthScopes.includes('https://www.googleapis.com/auth/script.external_request'));
+assert.ok(manifest.urlFetchWhitelist.includes('https://bling.com.br/'));
 
 const readModel = JSON.parse(await readFile(path.join(root, 'config/bling-read-model.json'), 'utf8'));
 assert.equal(readModel.source.apiVersion, '3.0');
