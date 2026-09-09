@@ -4,7 +4,7 @@ Integração analítica para transformar dados operacionais do Bling em relatór
 
 ## Estado atual
 
-O projeto está no Sprint 0 — Fundação. Esta versão entrega o esqueleto do repositório, o manifesto do Apps Script, a configuração segura por Script Properties, o armazenamento protegido de tokens e as validações locais iniciais.
+O projeto está no Sprint 0 — Fundação. Esta versão entrega o esqueleto do repositório, o manifesto do Apps Script, a configuração segura por Script Properties, o armazenamento protegido de tokens e o mapeamento versionado dos contratos de leitura da API do Bling.
 
 ## Decisões do MVP
 
@@ -41,8 +41,10 @@ src/
 tests/          Testes locais de estrutura e segurança
 scripts/        Validações executadas antes de publicar
 config/         Exemplos sem valores reais
-docs/           Arquitetura, ADRs e instruções
+docs/           Arquitetura, contratos, payloads sintéticos, ADRs e instruções
 ```
+
+O contrato dos endpoints, campos e relacionamentos do Bling está documentado em [`docs/bling-api-mapping.md`](docs/bling-api-mapping.md). A matriz consumível por código está em [`config/bling-read-model.json`](config/bling-read-model.json).
 
 ## Pré-requisitos
 
@@ -100,10 +102,13 @@ Esse comando valida a estrutura, o manifesto e padrões comuns de vazamento de s
 - Projeto Jira: [PRA — Pratearts Analytics API](https://kaisonwooo.atlassian.net/browse/PRA)
 - Estrutura inicial: PRA-10 / US-002 e PRA-43 / TT-002
 - Configuração segura: PRA-8 / US-003 e PRA-48 / TT-003
+- Contratos da API do Bling: PRA-9 / US-004 e PRA-44 / TT-004
 
 ## Referências oficiais
 
 - [Apps Script manifest](https://developers.google.com/apps-script/manifest)
 - [google/clasp](https://github.com/google/clasp)
 - [Bling API v3](https://developer.bling.com.br/bling-api)
+- [Referência OpenAPI do Bling](https://developer.bling.com.br/referencia)
+- [Boas práticas da API do Bling](https://developer.bling.com.br/boas-praticas)
 - [Migração do Bling para JWT](https://developer.bling.com.br/migracao-jwt)

@@ -1,0 +1,28 @@
+{
+  "modules": {
+    "data": [
+      {
+        "id": 94000001,
+        "nome": "VENDAS",
+        "descricao": "MODULO SINTETICO DE VENDAS",
+        "criarSituacoes": true
+      }
+    ]
+  },
+  "situations": {
+    "data": [
+      {
+        "id": 91002001,
+        "nome": "Atendido",
+        "idHerdado": 0,
+        "cor": "#00AA00"
+      },
+      {
+        "id": 94001002,
+        "nome": "Em aberto",
+        "idHerdado": 0,
+        "cor": "#FFAA00"
+      }
+    ]
+  }
+}

@@ -8,8 +8,17 @@ const requiredFiles = [
   '.clasp.json.example',
   '.gitignore',
   'README.md',
+  'config/bling-read-model.json',
   'config/script-properties.example.json',
   'docs/adr/ADR-001-decisoes-fundacao.md',
+  'docs/bling-api-mapping.md',
+  'docs/samples/bling/product-detail-with-variations.json',
+  'docs/samples/bling/product-list.json',
+  'docs/samples/bling/product-supplier-list.json',
+  'docs/samples/bling/sales-order-detail.json',
+  'docs/samples/bling/sales-order-list.json',
+  'docs/samples/bling/situations.json',
+  'docs/samples/bling/stock-balance.json',
   'src/appsscript.json',
   'src/Main.gs',
   'src/config/Config.gs',
@@ -26,6 +35,11 @@ assert.equal(manifest.runtimeVersion, 'V8');
 assert.equal(manifest.timeZone, 'America/Sao_Paulo');
 assert.equal(manifest.exceptionLogging, 'STACKDRIVER');
 assert.ok(manifest.oauthScopes.includes('https://www.googleapis.com/auth/script.external_request'));
+
+const readModel = JSON.parse(await readFile(path.join(root, 'config/bling-read-model.json'), 'utf8'));
+assert.equal(readModel.source.apiVersion, '3.0');
+assert.equal(readModel.defaults.readOnly, true);
+assert.ok(readModel.resources.every((resource) => resource.method === 'GET'));
 
 const forbiddenFiles = ['.clasp.json', '.clasprc.json', '.env'];
 const rootFiles = await readdir(root);

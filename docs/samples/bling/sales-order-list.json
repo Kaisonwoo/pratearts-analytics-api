@@ -1,0 +1,23 @@
+{
+  "data": [
+    {
+      "id": 91000001,
+      "numero": 1001,
+      "numeroLoja": "NUVEM-EXEMPLO-1001",
+      "data": "2026-01-10",
+      "dataSaida": "2026-01-11",
+      "dataPrevista": "2026-01-12",
+      "totalProdutos": 259.8,
+      "total": 271.8,
+      "contato": {
+        "id": 91001001
+      },
+      "situacao": {
+        "id": 91002001
+      },
+      "loja": {
+        "id": 91003001
+      }
+    }
+  ]
+}

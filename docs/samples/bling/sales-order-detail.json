@@ -1,0 +1,67 @@
+{
+  "data": {
+    "id": 91000001,
+    "numero": 1001,
+    "numeroLoja": "NUVEM-EXEMPLO-1001",
+    "data": "2026-01-10",
+    "dataSaida": "2026-01-11",
+    "dataPrevista": "2026-01-12",
+    "totalProdutos": 259.8,
+    "total": 271.8,
+    "contato": {
+      "id": 91001001
+    },
+    "situacao": {
+      "id": 91002001
+    },
+    "loja": {
+      "id": 91003001
+    },
+    "numeroPedidoCompra": "COMPRA-EXEMPLO-1001",
+    "outrasDespesas": 12,
+    "observacoes": "PEDIDO SINTETICO PARA TESTES",
+    "observacoesInternas": "NAO REPRESENTA UMA VENDA REAL",
+    "desconto": {
+      "valor": 0,
+      "unidade": "REAL"
+    },
+    "categoria": {
+      "id": 91005001
+    },
+    "notaFiscal": {
+      "id": 91006001
+    },
+    "itens": [
+      {
+        "id": 91004001,
+        "codigo": "SKU-EXEMPLO-FILHO-AZUL",
+        "unidade": "UN",
+        "quantidade": 2,
+        "desconto": 0,
+        "valor": 129.9,
+        "descricao": "JOIA EXEMPLO - VARIACAO AZUL",
+        "descricaoDetalhada": "ITEM SINTETICO",
+        "produto": {
+          "id": 92000002
+        }
+      }
+    ],
+    "parcelas": [],
+    "transporte": {
+      "fretePorConta": 1,
+      "frete": 12
+    },
+    "vendedor": {
+      "id": 91007001
+    },
+    "intermediador": {
+      "cnpj": "",
+      "nomeUsuario": "CONTA-EXEMPLO"
+    },
+    "taxas": {
+      "taxaComissao": 0,
+      "custoFrete": 12,
+      "valorBase": 259.8
+    }
+  }
+}
