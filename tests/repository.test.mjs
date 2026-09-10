@@ -533,7 +533,8 @@ test('BlingClient centraliza GET autenticado e desembrulha respostas 2xx', async
         API_BASE_URL: 'https://api.bling.com.br/Api/v3',
         TOKEN_MIN_VALIDITY_SECONDS: 60
       },
-      validate: () => ({ valid: true })
+      validate: () => ({ valid: true }),
+      getRequestPolicy: () => ({ maxRetries: 0, pageSize: 100, maxPages: 1000 })
     },
     PRASecrets: {
       hasUsableAccessToken: () => true,
@@ -547,6 +548,12 @@ test('BlingClient centraliza GET autenticado e desembrulha respostas 2xx', async
       info: (event, metadata) => logEntries.push({ level: 'INFO', event, metadata }),
       warn: (event, metadata) => logEntries.push({ level: 'WARN', event, metadata }),
       error: (event, metadata) => logEntries.push({ level: 'ERROR', event, metadata })
+    },
+    PRAResilience: {
+      acquireRateLimitSlot: () => 0,
+      isRetryableStatus: (statusCode, networkFailure) => Boolean(networkFailure) ||
+        statusCode === 408 || statusCode === 429 || statusCode >= 500,
+      waitBeforeRetry: () => 0
     },
     Utilities: {
       getUuid: () => `00000000-0000-4000-8000-${String(++uuidSequence).padStart(12, '0')}`
@@ -625,7 +632,8 @@ test('BlingClient padroniza 4xx, 5xx e falhas de rede sem vazar respostas', asyn
         API_BASE_URL: 'https://api.bling.com.br/Api/v3',
         TOKEN_MIN_VALIDITY_SECONDS: 60
       },
-      validate: () => ({ valid: true })
+      validate: () => ({ valid: true }),
+      getRequestPolicy: () => ({ maxRetries: 0, pageSize: 100, maxPages: 1000 })
     },
     PRASecrets: {
       hasUsableAccessToken: () => true,
@@ -639,6 +647,12 @@ test('BlingClient padroniza 4xx, 5xx e falhas de rede sem vazar respostas', asyn
       info: (event, metadata) => logEntries.push({ level: 'INFO', event, metadata }),
       warn: (event, metadata) => logEntries.push({ level: 'WARN', event, metadata }),
       error: (event, metadata) => logEntries.push({ level: 'ERROR', event, metadata })
+    },
+    PRAResilience: {
+      acquireRateLimitSlot: () => 0,
+      isRetryableStatus: (statusCode, networkFailure) => Boolean(networkFailure) ||
+        statusCode === 408 || statusCode === 429 || statusCode >= 500,
+      waitBeforeRetry: () => 0
     },
     Utilities: { getUuid: () => `correlation-${callIndex + 1}` },
     UrlFetchApp: {
@@ -694,4 +708,332 @@ test('teste manual do Bling retorna somente metadados seguros', async () => {
   assert.match(client, /get\('\/produtos', \{ pagina: 1, limite: 1 \}/);
   assert.match(client, /recordCount:/);
   assert.doesNotMatch(client, /console\.log\([^)]*(?:data|body|response)/i);
+});
+
+test('configuração de paginação e resiliência usa padrões seguros e limites válidos', async () => {
+  const values = new Map([
+    ['BLING_CLIENT_ID', 'client-id-de-teste'],
+    ['BLING_CLIENT_SECRET', 'client-secret-de-teste'],
+    ['BLING_REDIRECT_URI', 'https://script.google.com/macros/s/teste/exec']
+  ]);
+  const scriptProperties = {
+    getProperty: (key) => values.has(key) ? values.get(key) : null
+  };
+  const context = vm.createContext({
+    PropertiesService: { getScriptProperties: () => scriptProperties },
+    Date,
+    Number,
+    Object,
+    String,
+    Boolean
+  });
+
+  vm.runInContext(
+    await readFile(path.join(root, 'src/config/Config.gs'), 'utf8'),
+    context,
+    { filename: 'src/config/Config.gs' }
+  );
+
+  const policy = vm.runInContext('PRAConfig.getRequestPolicy()', context);
+  assert.equal(policy.requestsPerSecond, 3);
+  assert.equal(policy.pageSize, 100);
+  assert.equal(policy.maxRetries, 3);
+  assert.equal(policy.backoffBaseMs, 1000);
+  assert.equal(policy.backoffMaxMs, 8000);
+  assert.equal(policy.maxPages, 1000);
+  assert.equal(vm.runInContext('PRAConfig.validate().valid', context), true);
+  const snapshot = vm.runInContext('PRAConfig.getPublicSnapshot()', context);
+  assert.equal('BLING_NEXT_REQUEST_AT' in snapshot.configuredProperties, false);
+
+  values.set('BLING_REQUESTS_PER_SECOND', '4');
+  const invalid = vm.runInContext('PRAConfig.validate()', context);
+  assert.equal(invalid.valid, false);
+  assert.ok(invalid.invalid.includes('BLING_REQUESTS_PER_SECOND'));
+});
+
+test('rate limiter compartilha intervalo sob lock e backoff cresce até o teto', async () => {
+  const values = new Map();
+  const lockEvents = [];
+  const sleeps = [];
+  let now = 1000;
+  const context = vm.createContext({
+    PRAConfig: {
+      KEYS: { BLING_NEXT_REQUEST_AT: 'BLING_NEXT_REQUEST_AT' },
+      validate: () => ({ valid: true }),
+      getRequestPolicy: () => ({
+        requestsPerSecond: 2,
+        pageSize: 100,
+        maxRetries: 3,
+        backoffBaseMs: 1000,
+        backoffMaxMs: 8000,
+        maxPages: 1000
+      })
+    },
+    PropertiesService: {
+      getScriptProperties: () => ({
+        getProperty: (key) => values.has(key) ? values.get(key) : null,
+        setProperty: (key, value) => values.set(key, value)
+      })
+    },
+    LockService: {
+      getScriptLock: () => ({
+        waitLock: (milliseconds) => lockEvents.push(['wait', milliseconds]),
+        releaseLock: () => lockEvents.push(['release'])
+      })
+    },
+    Utilities: {
+      sleep: (milliseconds) => {
+        sleeps.push(milliseconds);
+        now += milliseconds;
+      }
+    },
+    Date: { now: () => now },
+    Math,
+    Number,
+    Object,
+    String,
+    Boolean
+  });
+
+  vm.runInContext(
+    await readFile(path.join(root, 'src/core/Resilience.gs'), 'utf8'),
+    context,
+    { filename: 'src/core/Resilience.gs' }
+  );
+
+  assert.equal(vm.runInContext('PRAResilience.acquireRateLimitSlot()', context), 0);
+  assert.equal(vm.runInContext('PRAResilience.acquireRateLimitSlot()', context), 500);
+  assert.deepEqual(sleeps, [500]);
+  assert.deepEqual(lockEvents, [
+    ['wait', 30000], ['release'],
+    ['wait', 30000], ['release']
+  ]);
+  assert.equal(values.get('BLING_NEXT_REQUEST_AT'), '2000');
+  assert.deepEqual(
+    Array.from(vm.runInContext('[1, 2, 3, 4, 5].map(PRAResilience.getBackoffDelay)', context)),
+    [1000, 2000, 4000, 8000, 8000]
+  );
+});
+
+test('BlingClient repete 429 e 5xx com backoff e preserva o correlationId', async () => {
+  const responses = [429, 503, 200];
+  const fetchCalls = [];
+  const delays = [];
+  const logEntries = [];
+  const context = vm.createContext({
+    PRAConfig: {
+      DEFAULTS: {
+        API_BASE_URL: 'https://api.bling.com.br/Api/v3',
+        TOKEN_MIN_VALIDITY_SECONDS: 60
+      },
+      validate: () => ({ valid: true }),
+      getRequestPolicy: () => ({ maxRetries: 3, pageSize: 100, maxPages: 1000 })
+    },
+    PRASecrets: {
+      hasUsableAccessToken: () => true,
+      getTokenStatus: () => ({ accessTokenPresent: true, expired: false })
+    },
+    PRAOAuthService: {
+      refreshAccessToken: () => ({ ok: true, refreshed: false }),
+      getValidAccessToken: () => 'token-sintetico-de-retentativa'
+    },
+    PRAResilience: {
+      acquireRateLimitSlot: () => 0,
+      isRetryableStatus: (statusCode, networkFailure) => Boolean(networkFailure) ||
+        statusCode === 408 || statusCode === 429 || statusCode >= 500,
+      waitBeforeRetry: (attempt) => {
+        const delay = 1000 * Math.pow(2, attempt - 1);
+        delays.push(delay);
+        return delay;
+      }
+    },
+    PRALogger: {
+      info: (event, metadata) => logEntries.push({ event, metadata }),
+      warn: (event, metadata) => logEntries.push({ event, metadata }),
+      error: (event, metadata) => logEntries.push({ event, metadata })
+    },
+    Utilities: { getUuid: () => 'correlation-retry-001' },
+    UrlFetchApp: {
+      fetch: (url, options) => {
+        const statusCode = responses[fetchCalls.length];
+        fetchCalls.push({ url, options });
+        return {
+          getResponseCode: () => statusCode,
+          getContentText: () => statusCode === 200 ?
+            JSON.stringify({ data: [{ id: 1 }] }) :
+            JSON.stringify({ error: 'conteudo-nao-deve-ser-logado' })
+        };
+      }
+    },
+    Date,
+    Math,
+    Number,
+    Object,
+    String,
+    Boolean,
+    JSON,
+    Array,
+    encodeURIComponent
+  });
+
+  vm.runInContext(
+    await readFile(path.join(root, 'src/clients/BlingClient.gs'), 'utf8'),
+    context,
+    { filename: 'src/clients/BlingClient.gs' }
+  );
+
+  const result = vm.runInContext(
+    `PRABlingClient.get('/produtos', {}, { operation: 'products.retry.test' })`,
+    context
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.attempts, 3);
+  assert.equal(fetchCalls.length, 3);
+  assert.deepEqual(delays, [1000, 2000]);
+  assert.ok(fetchCalls.every((call) =>
+    call.options.headers['X-Correlation-Id'] === 'correlation-retry-001'
+  ));
+  assert.equal(logEntries.filter((entry) => entry.event === 'bling_http_retry_scheduled').length, 2);
+  assert.doesNotMatch(JSON.stringify(logEntries), /conteudo-nao-deve-ser-logado|token-sintetico/);
+});
+
+test('BlingClient não repete erros permanentes', async () => {
+  let fetchCount = 0;
+  const delays = [];
+  const context = vm.createContext({
+    PRAConfig: {
+      DEFAULTS: {
+        API_BASE_URL: 'https://api.bling.com.br/Api/v3',
+        TOKEN_MIN_VALIDITY_SECONDS: 60
+      },
+      validate: () => ({ valid: true }),
+      getRequestPolicy: () => ({ maxRetries: 3, pageSize: 100, maxPages: 1000 })
+    },
+    PRASecrets: {
+      hasUsableAccessToken: () => true,
+      getTokenStatus: () => ({ accessTokenPresent: true, expired: false })
+    },
+    PRAOAuthService: {
+      refreshAccessToken: () => ({ ok: true, refreshed: false }),
+      getValidAccessToken: () => 'token-sintetico'
+    },
+    PRAResilience: {
+      acquireRateLimitSlot: () => 0,
+      isRetryableStatus: (statusCode) => statusCode === 408 || statusCode === 429 || statusCode >= 500,
+      waitBeforeRetry: (attempt) => delays.push(attempt)
+    },
+    PRALogger: { info: () => {}, warn: () => {}, error: () => {} },
+    Utilities: { getUuid: () => 'correlation-permanent-001' },
+    UrlFetchApp: {
+      fetch: () => {
+        fetchCount += 1;
+        return {
+          getResponseCode: () => 422,
+          getContentText: () => JSON.stringify({ error: 'inválido' })
+        };
+      }
+    },
+    Date,
+    Number,
+    Object,
+    String,
+    Boolean,
+    JSON,
+    Array,
+    encodeURIComponent
+  });
+
+  vm.runInContext(
+    await readFile(path.join(root, 'src/clients/BlingClient.gs'), 'utf8'),
+    context,
+    { filename: 'src/clients/BlingClient.gs' }
+  );
+
+  const result = vm.runInContext(`PRABlingClient.get('/produtos', {}, {})`, context);
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, 'validation_error');
+  assert.equal(result.attempts, 1);
+  assert.equal(fetchCount, 1);
+  assert.deepEqual(delays, []);
+});
+
+test('paginador avança páginas sem pular nem repetir registros', async () => {
+  const fetchCalls = [];
+  const pages = {
+    1: [{ id: 1 }, { id: 2 }],
+    2: [{ id: 3 }]
+  };
+  let uuidSequence = 0;
+  const context = vm.createContext({
+    PRAConfig: {
+      DEFAULTS: {
+        API_BASE_URL: 'https://api.bling.com.br/Api/v3',
+        TOKEN_MIN_VALIDITY_SECONDS: 60
+      },
+      validate: () => ({ valid: true }),
+      getRequestPolicy: () => ({ maxRetries: 0, pageSize: 100, maxPages: 1000 })
+    },
+    PRASecrets: {
+      hasUsableAccessToken: () => true,
+      getTokenStatus: () => ({ accessTokenPresent: true, expired: false })
+    },
+    PRAOAuthService: {
+      refreshAccessToken: () => ({ ok: true, refreshed: false }),
+      getValidAccessToken: () => 'token-sintetico-de-paginacao'
+    },
+    PRAResilience: {
+      acquireRateLimitSlot: () => 0,
+      isRetryableStatus: () => false,
+      waitBeforeRetry: () => 0
+    },
+    PRALogger: { info: () => {}, warn: () => {}, error: () => {} },
+    Utilities: {
+      getUuid: () => `pagination-correlation-${++uuidSequence}`
+    },
+    UrlFetchApp: {
+      fetch: (url) => {
+        fetchCalls.push(url);
+        const page = Number(new URL(url).searchParams.get('pagina'));
+        return {
+          getResponseCode: () => 200,
+          getContentText: () => JSON.stringify({ data: pages[page] || [] })
+        };
+      }
+    },
+    URL,
+    Date,
+    Number,
+    Object,
+    String,
+    Boolean,
+    JSON,
+    Array,
+    encodeURIComponent
+  });
+
+  vm.runInContext(
+    await readFile(path.join(root, 'src/clients/BlingClient.gs'), 'utf8'),
+    context,
+    { filename: 'src/clients/BlingClient.gs' }
+  );
+
+  const result = vm.runInContext(
+    `PRABlingClient.getAllPages('/produtos', { criterio: 'ATIVOS' }, {
+      operation: 'products.list.pagination.test',
+      pageSize: 2,
+      maxPages: 5
+    })`,
+    context
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.pagination.complete, true);
+  assert.equal(result.pagination.pagesFetched, 2);
+  assert.equal(result.pagination.recordCount, 3);
+  assert.deepEqual(Array.from(result.data, (item) => item.id), [1, 2, 3]);
+  assert.deepEqual(fetchCalls, [
+    'https://api.bling.com.br/Api/v3/produtos?criterio=ATIVOS&limite=2&pagina=1',
+    'https://api.bling.com.br/Api/v3/produtos?criterio=ATIVOS&limite=2&pagina=2'
+  ]);
 });

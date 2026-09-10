@@ -87,6 +87,8 @@ Para entender a renovação sob lock, o comportamento em falhas e a validação 
 
 Para usar o cliente HTTP autenticado, compreender os envelopes de resposta e executar o teste seguro de conectividade, consulte [`docs/http-client.md`](docs/http-client.md).
 
+Para consultar listagens completas com paginação, ritmo controlado e backoff exponencial, consulte [`docs/pagination-resilience.md`](docs/pagination-resilience.md).
+
 Nunca envie ao GitHub:
 
 - `client_secret`;
@@ -112,6 +114,7 @@ Esse comando valida a estrutura, o manifesto e padrões comuns de vazamento de s
 - Autorização OAuth do Bling: PRA-11 / US-005 e PRA-47 / TT-005
 - Renovação automática dos tokens: PRA-12 / US-006 e PRA-46 / TT-006
 - Cliente HTTP autenticado: PRA-13 / US-007 e PRA-45 / TT-007
+- Paginação, limites e retentativas: PRA-14 / US-008 e PRA-49 / TT-008
 
 ## Referências oficiais
 

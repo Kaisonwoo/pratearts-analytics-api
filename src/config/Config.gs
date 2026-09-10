@@ -10,6 +10,13 @@ var PRAConfig = (function () {
     BLING_TOKEN_EXPIRES_AT: 'BLING_TOKEN_EXPIRES_AT',
     BLING_OAUTH_STATE_HASH: 'BLING_OAUTH_STATE_HASH',
     BLING_OAUTH_STATE_EXPIRES_AT: 'BLING_OAUTH_STATE_EXPIRES_AT',
+    BLING_REQUESTS_PER_SECOND: 'BLING_REQUESTS_PER_SECOND',
+    BLING_PAGE_SIZE: 'BLING_PAGE_SIZE',
+    BLING_MAX_RETRIES: 'BLING_MAX_RETRIES',
+    BLING_BACKOFF_BASE_MS: 'BLING_BACKOFF_BASE_MS',
+    BLING_BACKOFF_MAX_MS: 'BLING_BACKOFF_MAX_MS',
+    BLING_MAX_PAGES: 'BLING_MAX_PAGES',
+    BLING_NEXT_REQUEST_AT: 'BLING_NEXT_REQUEST_AT',
     BLING_STATUS_ATENDIDO_ID: 'BLING_STATUS_ATENDIDO_ID',
     DATA_SPREADSHEET_ID: 'DATA_SPREADSHEET_ID',
     SYNC_TIMEZONE: 'SYNC_TIMEZONE',
@@ -23,7 +30,13 @@ var PRAConfig = (function () {
     SYNC_TIMEZONE: 'America/Sao_Paulo',
     SYNC_HOUR: '6',
     TOKEN_MIN_VALIDITY_SECONDS: 60,
-    OAUTH_STATE_TTL_SECONDS: 600
+    OAUTH_STATE_TTL_SECONDS: 600,
+    BLING_REQUESTS_PER_SECOND: 3,
+    BLING_PAGE_SIZE: 100,
+    BLING_MAX_RETRIES: 3,
+    BLING_BACKOFF_BASE_MS: 1000,
+    BLING_BACKOFF_MAX_MS: 8000,
+    BLING_MAX_PAGES: 1000
   });
 
   var SENSITIVE_KEYS = Object.freeze([
@@ -42,7 +55,8 @@ var PRAConfig = (function () {
 
   var INTERNAL_KEYS = Object.freeze([
     KEYS.BLING_OAUTH_STATE_HASH,
-    KEYS.BLING_OAUTH_STATE_EXPIRES_AT
+    KEYS.BLING_OAUTH_STATE_EXPIRES_AT,
+    KEYS.BLING_NEXT_REQUEST_AT
   ]);
 
   function properties_() {
@@ -69,6 +83,32 @@ var PRAConfig = (function () {
     return value;
   }
 
+  function readInteger_(key, fallbackValue) {
+    var raw = getPublicValue(key, String(fallbackValue));
+    var value = Number(raw);
+    return Number.isInteger(value) ? value : NaN;
+  }
+
+  function getRequestPolicy() {
+    return {
+      requestsPerSecond: readInteger_(
+        KEYS.BLING_REQUESTS_PER_SECOND,
+        DEFAULTS.BLING_REQUESTS_PER_SECOND
+      ),
+      pageSize: readInteger_(KEYS.BLING_PAGE_SIZE, DEFAULTS.BLING_PAGE_SIZE),
+      maxRetries: readInteger_(KEYS.BLING_MAX_RETRIES, DEFAULTS.BLING_MAX_RETRIES),
+      backoffBaseMs: readInteger_(
+        KEYS.BLING_BACKOFF_BASE_MS,
+        DEFAULTS.BLING_BACKOFF_BASE_MS
+      ),
+      backoffMaxMs: readInteger_(
+        KEYS.BLING_BACKOFF_MAX_MS,
+        DEFAULTS.BLING_BACKOFF_MAX_MS
+      ),
+      maxPages: readInteger_(KEYS.BLING_MAX_PAGES, DEFAULTS.BLING_MAX_PAGES)
+    };
+  }
+
   function validate() {
     var props = properties_();
     var missing = OAUTH_SETUP_KEYS.filter(function (key) {
@@ -77,12 +117,34 @@ var PRAConfig = (function () {
     var invalid = [];
     var syncHour = Number(getPublicValue(KEYS.SYNC_HOUR, DEFAULTS.SYNC_HOUR));
     var redirectUri = props.getProperty(KEYS.BLING_REDIRECT_URI);
+    var policy = getRequestPolicy();
 
     if (!Number.isInteger(syncHour) || syncHour < 0 || syncHour > 23) {
       invalid.push(KEYS.SYNC_HOUR);
     }
     if (redirectUri && redirectUri.indexOf('https://') !== 0) {
       invalid.push(KEYS.BLING_REDIRECT_URI);
+    }
+    if (!Number.isInteger(policy.requestsPerSecond) ||
+        policy.requestsPerSecond < 1 || policy.requestsPerSecond > 3) {
+      invalid.push(KEYS.BLING_REQUESTS_PER_SECOND);
+    }
+    if (!Number.isInteger(policy.pageSize) || policy.pageSize < 1 || policy.pageSize > 100) {
+      invalid.push(KEYS.BLING_PAGE_SIZE);
+    }
+    if (!Number.isInteger(policy.maxRetries) || policy.maxRetries < 0 || policy.maxRetries > 5) {
+      invalid.push(KEYS.BLING_MAX_RETRIES);
+    }
+    if (!Number.isInteger(policy.backoffBaseMs) ||
+        policy.backoffBaseMs < 250 || policy.backoffBaseMs > 10000) {
+      invalid.push(KEYS.BLING_BACKOFF_BASE_MS);
+    }
+    if (!Number.isInteger(policy.backoffMaxMs) ||
+        policy.backoffMaxMs < policy.backoffBaseMs || policy.backoffMaxMs > 30000) {
+      invalid.push(KEYS.BLING_BACKOFF_MAX_MS);
+    }
+    if (!Number.isInteger(policy.maxPages) || policy.maxPages < 1 || policy.maxPages > 10000) {
+      invalid.push(KEYS.BLING_MAX_PAGES);
     }
 
     return {
@@ -106,6 +168,7 @@ var PRAConfig = (function () {
       apiBaseUrl: DEFAULTS.API_BASE_URL,
       syncTimezone: getPublicValue(KEYS.SYNC_TIMEZONE, DEFAULTS.SYNC_TIMEZONE),
       syncHour: Number(getPublicValue(KEYS.SYNC_HOUR, DEFAULTS.SYNC_HOUR)),
+      requestPolicy: getRequestPolicy(),
       configuredProperties: present,
       validation: validate()
     };
@@ -116,6 +179,7 @@ var PRAConfig = (function () {
     DEFAULTS: DEFAULTS,
     getPublicValue: getPublicValue,
     requirePublicValue: requirePublicValue,
+    getRequestPolicy: getRequestPolicy,
     getPublicSnapshot: getPublicSnapshot,
     isSensitiveKey: isSensitiveKey,
     validate: validate
