@@ -37,6 +37,12 @@ Visualização exclusiva para a Administração. A tecnologia definitiva será v
 7. O estado do lote permite retomada após falha.
 8. Logs registram somente metadados não sensíveis.
 
+Para a carga inicial de pedidos, `PRAOrdersInitialLoad` consulta somente vendas
+na situação `Atendido`, processa páginas em lotes limitados e confirma o
+checkpoint apenas após cada página ser aceita pelo armazenamento. O último
+checkpoint válido permite retomar a partir da página seguinte sem duplicar a
+confirmação do lote anterior.
+
 ## Princípios
 
 - Segurança por padrão.

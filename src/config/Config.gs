@@ -16,9 +16,12 @@ var PRAConfig = (function () {
     BLING_BACKOFF_BASE_MS: 'BLING_BACKOFF_BASE_MS',
     BLING_BACKOFF_MAX_MS: 'BLING_BACKOFF_MAX_MS',
     BLING_MAX_PAGES: 'BLING_MAX_PAGES',
+    BLING_MAX_PAGES_PER_RUN: 'BLING_MAX_PAGES_PER_RUN',
     BLING_NEXT_REQUEST_AT: 'BLING_NEXT_REQUEST_AT',
     BLING_LAST_SUCCESS_AT: 'BLING_LAST_SUCCESS_AT',
     BLING_LAST_SUCCESS_CORRELATION_ID: 'BLING_LAST_SUCCESS_CORRELATION_ID',
+    BLING_INITIAL_ORDERS_CHECKPOINT: 'BLING_INITIAL_ORDERS_CHECKPOINT',
+    BLING_LAST_INITIAL_ORDERS_RUN: 'BLING_LAST_INITIAL_ORDERS_RUN',
     BLING_STATUS_ATENDIDO_ID: 'BLING_STATUS_ATENDIDO_ID',
     DATA_SPREADSHEET_ID: 'DATA_SPREADSHEET_ID',
     SYNC_TIMEZONE: 'SYNC_TIMEZONE',
@@ -38,7 +41,8 @@ var PRAConfig = (function () {
     BLING_MAX_RETRIES: 3,
     BLING_BACKOFF_BASE_MS: 1000,
     BLING_BACKOFF_MAX_MS: 8000,
-    BLING_MAX_PAGES: 1000
+    BLING_MAX_PAGES: 1000,
+    BLING_MAX_PAGES_PER_RUN: 10
   });
 
   var SENSITIVE_KEYS = Object.freeze([
@@ -60,7 +64,9 @@ var PRAConfig = (function () {
     KEYS.BLING_OAUTH_STATE_EXPIRES_AT,
     KEYS.BLING_NEXT_REQUEST_AT,
     KEYS.BLING_LAST_SUCCESS_AT,
-    KEYS.BLING_LAST_SUCCESS_CORRELATION_ID
+    KEYS.BLING_LAST_SUCCESS_CORRELATION_ID,
+    KEYS.BLING_INITIAL_ORDERS_CHECKPOINT,
+    KEYS.BLING_LAST_INITIAL_ORDERS_RUN
   ]);
 
   function properties_() {
@@ -109,7 +115,11 @@ var PRAConfig = (function () {
         KEYS.BLING_BACKOFF_MAX_MS,
         DEFAULTS.BLING_BACKOFF_MAX_MS
       ),
-      maxPages: readInteger_(KEYS.BLING_MAX_PAGES, DEFAULTS.BLING_MAX_PAGES)
+      maxPages: readInteger_(KEYS.BLING_MAX_PAGES, DEFAULTS.BLING_MAX_PAGES),
+      maxPagesPerRun: readInteger_(
+        KEYS.BLING_MAX_PAGES_PER_RUN,
+        DEFAULTS.BLING_MAX_PAGES_PER_RUN
+      )
     };
   }
 
@@ -149,6 +159,10 @@ var PRAConfig = (function () {
     }
     if (!Number.isInteger(policy.maxPages) || policy.maxPages < 1 || policy.maxPages > 10000) {
       invalid.push(KEYS.BLING_MAX_PAGES);
+    }
+    if (!Number.isInteger(policy.maxPagesPerRun) ||
+        policy.maxPagesPerRun < 1 || policy.maxPagesPerRun > 100) {
+      invalid.push(KEYS.BLING_MAX_PAGES_PER_RUN);
     }
 
     return {

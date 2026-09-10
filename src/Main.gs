@@ -40,3 +40,20 @@ function testBlingApiConnection() {
 function runDailySync() {
   return PRADailySyncJob.run();
 }
+
+/**
+ * Executa ou retoma a carga inicial de pedidos atendidos para um período.
+ * O armazenamento da página pode ser fornecido pelo próximo estágio por lote;
+ * o checkpoint permanece em Script Properties e não contém pedidos.
+ * @param {string} startDate Data inicial no formato YYYY-MM-DD.
+ * @param {string} endDate Data final no formato YYYY-MM-DD.
+ * @param {boolean} reset Reinicia o checkpoint do mesmo período quando true.
+ * @return {Object} Metadados seguros da execução.
+ */
+function runInitialOrdersLoad(startDate, endDate, reset) {
+  return PRAOrdersInitialLoad.run({
+    startDate: startDate,
+    endDate: endDate,
+    reset: Boolean(reset)
+  });
+}
