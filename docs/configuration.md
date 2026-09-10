@@ -21,6 +21,13 @@
 | `BLING_TOKEN_EXPIRES_AT` | Após OAuth | Não | Expiração do access token em Unix epoch, milissegundos. |
 | `BLING_OAUTH_STATE_HASH` | Gerenciada | Sim | Hash SHA-256 temporário usado para validar o callback. |
 | `BLING_OAUTH_STATE_EXPIRES_AT` | Gerenciada | Não | Expiração do link de autorização, em Unix epoch. |
+| `BLING_REQUESTS_PER_SECOND` | Não | Não | Ritmo máximo entre 1 e 3 chamadas por segundo; padrão: `3`. |
+| `BLING_PAGE_SIZE` | Não | Não | Registros solicitados por página, entre 1 e 100; padrão: `100`. |
+| `BLING_MAX_RETRIES` | Não | Não | Retentativas de falhas transitórias, entre 0 e 5; padrão: `3`. |
+| `BLING_BACKOFF_BASE_MS` | Não | Não | Espera inicial do backoff; padrão: `1000` ms. |
+| `BLING_BACKOFF_MAX_MS` | Não | Não | Teto da espera progressiva; padrão: `8000` ms. |
+| `BLING_MAX_PAGES` | Não | Não | Limite de segurança por listagem; padrão: `1000`. |
+| `BLING_NEXT_REQUEST_AT` | Gerenciada | Não | Reserva interna do próximo intervalo permitido entre chamadas. |
 | `BLING_STATUS_ATENDIDO_ID` | Antes da coleta | Não | ID técnico da situação válida de venda. |
 | `DATA_SPREADSHEET_ID` | Antes da persistência | Não | Identifica a base de dados do MVP. |
 | `SYNC_TIMEZONE` | Não | Não | Padrão: `America/Sao_Paulo`. |
@@ -64,3 +71,4 @@ Ele nunca retorna Client ID, Client Secret, access token ou refresh token.
 
 O passo a passo completo de implantação e primeira autorização está em [`oauth-authorization.md`](oauth-authorization.md).
 O fluxo de renovação automática e seu teste manual seguro estão em [`token-renewal.md`](token-renewal.md).
+O paginador, o limitador de chamadas e as retentativas estão em [`pagination-resilience.md`](pagination-resilience.md).
