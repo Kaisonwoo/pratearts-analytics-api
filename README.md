@@ -85,6 +85,8 @@ Para implantar o callback e realizar a primeira autorização, consulte [`docs/o
 
 Para entender a renovação sob lock, o comportamento em falhas e a validação manual, consulte [`docs/token-renewal.md`](docs/token-renewal.md).
 
+Para usar o cliente HTTP autenticado, compreender os envelopes de resposta e executar o teste seguro de conectividade, consulte [`docs/http-client.md`](docs/http-client.md).
+
 Nunca envie ao GitHub:
 
 - `client_secret`;
@@ -109,6 +111,7 @@ Esse comando valida a estrutura, o manifesto e padrões comuns de vazamento de s
 - Contratos da API do Bling: PRA-9 / US-004 e PRA-44 / TT-004
 - Autorização OAuth do Bling: PRA-11 / US-005 e PRA-47 / TT-005
 - Renovação automática dos tokens: PRA-12 / US-006 e PRA-46 / TT-006
+- Cliente HTTP autenticado: PRA-13 / US-007 e PRA-45 / TT-007
 
 ## Referências oficiais
 
