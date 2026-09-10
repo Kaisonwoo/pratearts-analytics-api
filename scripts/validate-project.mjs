@@ -12,6 +12,7 @@ const requiredFiles = [
   'config/script-properties.example.json',
   'docs/adr/ADR-001-decisoes-fundacao.md',
   'docs/bling-api-mapping.md',
+  'docs/connectivity-health.md',
   'docs/http-client.md',
   'docs/oauth-authorization.md',
   'docs/pagination-resilience.md',
@@ -25,11 +26,13 @@ const requiredFiles = [
   'docs/samples/bling/stock-balance.json',
   'src/appsscript.json',
   'src/Main.gs',
+  'src/api/WebApp.gs',
   'src/config/Config.gs',
   'src/config/Secrets.gs',
   'src/clients/BlingClient.gs',
   'src/core/Resilience.gs',
   'src/core/Logger.gs',
+  'src/services/HealthService.gs',
   'src/services/OAuthService.gs'
 ];
 

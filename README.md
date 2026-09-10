@@ -4,7 +4,7 @@ Integração analítica para transformar dados operacionais do Bling em relatór
 
 ## Estado atual
 
-O Sprint 0 — Fundação foi concluído. O projeto está no Sprint 1 — Acesso ao Bling, com OAuth 2.0 validado e renovação automática e atômica dos tokens.
+O Sprint 0 — Fundação foi concluído. O projeto está no Sprint 1 — Acesso ao Bling, com OAuth 2.0 validado, renovação automática dos tokens e diagnóstico seguro de conectividade em implementação.
 
 ## Decisões do MVP
 
@@ -89,6 +89,8 @@ Para usar o cliente HTTP autenticado, compreender os envelopes de resposta e exe
 
 Para consultar listagens completas com paginação, ritmo controlado e backoff exponencial, consulte [`docs/pagination-resilience.md`](docs/pagination-resilience.md).
 
+Para interpretar os estados de conectividade e o registro do último acesso bem-sucedido, consulte [`docs/connectivity-health.md`](docs/connectivity-health.md).
+
 Nunca envie ao GitHub:
 
 - `client_secret`;
@@ -115,6 +117,7 @@ Esse comando valida a estrutura, o manifesto e padrões comuns de vazamento de s
 - Renovação automática dos tokens: PRA-12 / US-006 e PRA-46 / TT-006
 - Cliente HTTP autenticado: PRA-13 / US-007 e PRA-45 / TT-007
 - Paginação, limites e retentativas: PRA-14 / US-008 e PRA-49 / TT-008
+- Diagnóstico de conectividade: PRA-15 / US-009 e PRA-52 / TT-009
 
 ## Referências oficiais
 
