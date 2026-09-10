@@ -522,3 +522,176 @@ test('falha de renovação preserva o último estado e não registra segredos', 
   assert.doesNotMatch(JSON.stringify([result, logEntries]), /refresh-token-anterior-falha/);
   assert.doesNotMatch(JSON.stringify([result, logEntries]), /client-secret-falha-teste/);
 });
+
+test('BlingClient centraliza GET autenticado e desembrulha respostas 2xx', async () => {
+  const fetchCalls = [];
+  const logEntries = [];
+  let uuidSequence = 0;
+  const context = vm.createContext({
+    PRAConfig: {
+      DEFAULTS: {
+        API_BASE_URL: 'https://api.bling.com.br/Api/v3',
+        TOKEN_MIN_VALIDITY_SECONDS: 60
+      },
+      validate: () => ({ valid: true })
+    },
+    PRASecrets: {
+      hasUsableAccessToken: () => true,
+      getTokenStatus: () => ({ accessTokenPresent: true, expired: false })
+    },
+    PRAOAuthService: {
+      refreshAccessToken: () => ({ ok: true, refreshed: false }),
+      getValidAccessToken: () => 'access-token-sintetico-do-cliente'
+    },
+    PRALogger: {
+      info: (event, metadata) => logEntries.push({ level: 'INFO', event, metadata }),
+      warn: (event, metadata) => logEntries.push({ level: 'WARN', event, metadata }),
+      error: (event, metadata) => logEntries.push({ level: 'ERROR', event, metadata })
+    },
+    Utilities: {
+      getUuid: () => `00000000-0000-4000-8000-${String(++uuidSequence).padStart(12, '0')}`
+    },
+    UrlFetchApp: {
+      fetch: (url, options) => {
+        fetchCalls.push({ url, options });
+        return {
+          getResponseCode: () => 200,
+          getContentText: () => JSON.stringify({
+            data: [{ id: 101, codigo: 'SKU-SINTETICO', nome: 'Produto sintético' }]
+          })
+        };
+      }
+    },
+    Date,
+    Number,
+    Object,
+    String,
+    Boolean,
+    JSON,
+    Array,
+    encodeURIComponent
+  });
+
+  vm.runInContext(
+    await readFile(path.join(root, 'src/clients/BlingClient.gs'), 'utf8'),
+    context,
+    { filename: 'src/clients/BlingClient.gs' }
+  );
+
+  const result = vm.runInContext(
+    `PRABlingClient.get('/produtos', { limite: 1, pagina: 1 }, { operation: 'products.list.test' })`,
+    context
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.data.length, 1);
+  assert.equal(fetchCalls.length, 1);
+  assert.equal(
+    fetchCalls[0].url,
+    'https://api.bling.com.br/Api/v3/produtos?limite=1&pagina=1'
+  );
+  assert.equal(fetchCalls[0].options.method, 'get');
+  assert.equal(fetchCalls[0].options.muteHttpExceptions, true);
+  assert.equal(
+    fetchCalls[0].options.headers.Authorization,
+    'Bearer access-token-sintetico-do-cliente'
+  );
+  assert.equal(fetchCalls[0].options.headers['X-Correlation-Id'], result.correlationId);
+  assert.equal(logEntries[0].event, 'bling_http_succeeded');
+  assert.equal(logEntries[0].metadata.correlationId, result.correlationId);
+  assert.doesNotMatch(JSON.stringify(logEntries), /access-token-sintetico-do-cliente/);
+  assert.doesNotMatch(JSON.stringify(logEntries), /Produto sintético|SKU-SINTETICO/);
+});
+
+test('BlingClient padroniza 4xx, 5xx e falhas de rede sem vazar respostas', async () => {
+  const logEntries = [];
+  const responses = [
+    {
+      getResponseCode: () => 422,
+      getContentText: () => JSON.stringify({
+        error: { message: 'cliente-real-nao-pode-aparecer' }
+      })
+    },
+    {
+      getResponseCode: () => 503,
+      getContentText: () => '<html>indisponível</html>'
+    }
+  ];
+  let callIndex = 0;
+  const context = vm.createContext({
+    PRAConfig: {
+      DEFAULTS: {
+        API_BASE_URL: 'https://api.bling.com.br/Api/v3',
+        TOKEN_MIN_VALIDITY_SECONDS: 60
+      },
+      validate: () => ({ valid: true })
+    },
+    PRASecrets: {
+      hasUsableAccessToken: () => true,
+      getTokenStatus: () => ({ accessTokenPresent: true, expired: false })
+    },
+    PRAOAuthService: {
+      refreshAccessToken: () => ({ ok: true, refreshed: false }),
+      getValidAccessToken: () => 'token-que-nao-pode-aparecer'
+    },
+    PRALogger: {
+      info: (event, metadata) => logEntries.push({ level: 'INFO', event, metadata }),
+      warn: (event, metadata) => logEntries.push({ level: 'WARN', event, metadata }),
+      error: (event, metadata) => logEntries.push({ level: 'ERROR', event, metadata })
+    },
+    Utilities: { getUuid: () => `correlation-${callIndex + 1}` },
+    UrlFetchApp: {
+      fetch: () => {
+        if (callIndex === 2) throw new Error('detalhe-rede-que-nao-pode-aparecer');
+        return responses[callIndex++];
+      }
+    },
+    Date,
+    Number,
+    Object,
+    String,
+    Boolean,
+    JSON,
+    Array,
+    encodeURIComponent
+  });
+
+  vm.runInContext(
+    await readFile(path.join(root, 'src/clients/BlingClient.gs'), 'utf8'),
+    context,
+    { filename: 'src/clients/BlingClient.gs' }
+  );
+
+  const validation = vm.runInContext(`PRABlingClient.get('/produtos', {}, {})`, context);
+  const unavailable = vm.runInContext(`PRABlingClient.get('/produtos', {}, {})`, context);
+  callIndex = 2;
+  const network = vm.runInContext(`PRABlingClient.get('/produtos', {}, {})`, context);
+
+  assert.equal(validation.ok, false);
+  assert.equal(validation.statusCode, 422);
+  assert.equal(validation.error.code, 'validation_error');
+  assert.equal(validation.error.retryable, false);
+  assert.equal(unavailable.statusCode, 503);
+  assert.equal(unavailable.error.code, 'service_unavailable');
+  assert.equal(unavailable.error.retryable, true);
+  assert.equal(network.statusCode, null);
+  assert.equal(network.error.code, 'network_error');
+  assert.equal(network.error.retryable, true);
+
+  const serialized = JSON.stringify([validation, unavailable, network, logEntries]);
+  assert.doesNotMatch(serialized, /cliente-real-nao-pode-aparecer/);
+  assert.doesNotMatch(serialized, /token-que-nao-pode-aparecer/);
+  assert.doesNotMatch(serialized, /detalhe-rede-que-nao-pode-aparecer/);
+});
+
+test('teste manual do Bling retorna somente metadados seguros', async () => {
+  const main = await readFile(path.join(root, 'src/Main.gs'), 'utf8');
+  const client = await readFile(path.join(root, 'src/clients/BlingClient.gs'), 'utf8');
+
+  assert.match(main, /function testBlingApiConnection\(\)/);
+  assert.match(main, /PRABlingClient\.probe\(\)/);
+  assert.match(client, /get\('\/produtos', \{ pagina: 1, limite: 1 \}/);
+  assert.match(client, /recordCount:/);
+  assert.doesNotMatch(client, /console\.log\([^)]*(?:data|body|response)/i);
+});

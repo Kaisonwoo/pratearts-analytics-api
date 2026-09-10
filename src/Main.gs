@@ -24,6 +24,15 @@ function refreshBlingAccessToken() {
 }
 
 /**
+ * Faz uma consulta mínima e somente leitura para validar o acesso à API.
+ * Retorna apenas metadados seguros; nenhum produto ou token é exposto.
+ * @return {Object} Resultado seguro do teste de conectividade.
+ */
+function testBlingApiConnection() {
+  return PRABlingClient.probe();
+}
+
+/**
  * Ponto de entrada do gatilho diário. A sincronização será implementada
  * nas histórias de coleta; por enquanto retorna um estado explícito.
  * @return {Object} Resultado do disparo.
