@@ -917,8 +917,10 @@ test('configuração de paginação e resiliência usa padrões seguros e limite
   assert.equal(policy.backoffBaseMs, 1000);
   assert.equal(policy.backoffMaxMs, 8000);
   assert.equal(policy.maxPages, 1000);
+  assert.equal(policy.maxPagesPerRun, 10);
   assert.equal(vm.runInContext('PRAConfig.validate().valid', context), true);
   const snapshot = vm.runInContext('PRAConfig.getPublicSnapshot()', context);
+  assert.equal('BLING_MAX_PAGES_PER_RUN' in snapshot.configuredProperties, true);
   assert.equal('BLING_NEXT_REQUEST_AT' in snapshot.configuredProperties, false);
   assert.equal('BLING_LAST_SUCCESS_AT' in snapshot.configuredProperties, false);
   assert.equal('BLING_LAST_SUCCESS_CORRELATION_ID' in snapshot.configuredProperties, false);
@@ -1214,4 +1216,185 @@ test('paginador avança páginas sem pular nem repetir registros', async () => {
     'https://api.bling.com.br/Api/v3/produtos?criterio=ATIVOS&limite=2&pagina=1',
     'https://api.bling.com.br/Api/v3/produtos?criterio=ATIVOS&limite=2&pagina=2'
   ]);
+});
+
+function createInitialOrdersContext({ pages, pageSize = 2, maxPagesPerRun = 10, statusId = '77' } = {}) {
+  const values = new Map();
+  const calls = [];
+  const logs = [];
+  let uuid = 0;
+  const scriptProperties = {
+    getProperty: (key) => values.has(key) ? values.get(key) : null,
+    setProperties: (items) => Object.entries(items).forEach(([key, value]) => values.set(key, value)),
+    deleteProperty: (key) => values.delete(key)
+  };
+  const context = vm.createContext({
+    PRAConfig: {
+      KEYS: {
+        BLING_STATUS_ATENDIDO_ID: 'BLING_STATUS_ATENDIDO_ID',
+        BLING_INITIAL_ORDERS_CHECKPOINT: 'BLING_INITIAL_ORDERS_CHECKPOINT',
+        BLING_LAST_INITIAL_ORDERS_RUN: 'BLING_LAST_INITIAL_ORDERS_RUN'
+      },
+      getPublicValue: (key, fallback) => values.has(key) ? values.get(key) : fallback,
+      getRequestPolicy: () => ({
+        pageSize,
+        maxPages: 100,
+        maxPagesPerRun
+      })
+    },
+    PRABlingClient: {
+      get: (_path, query) => {
+        calls.push(query);
+        const page = Number(query.pagina);
+        const pageResult = pages[page];
+        if (pageResult && pageResult.error) {
+          return {
+            ok: false,
+            statusCode: pageResult.statusCode || 503,
+            correlationId: `corr-${page}`,
+            error: { code: pageResult.error }
+          };
+        }
+        return {
+          ok: true,
+          statusCode: 200,
+          correlationId: `corr-${page}`,
+          data: pageResult ? pageResult.data : []
+        };
+      }
+    },
+    PRALogger: {
+      info: (event, metadata) => logs.push({ level: 'INFO', event, metadata }),
+      warn: (event, metadata) => logs.push({ level: 'WARN', event, metadata }),
+      error: (event, metadata) => logs.push({ level: 'ERROR', event, metadata })
+    },
+    PropertiesService: { getScriptProperties: () => scriptProperties },
+    LockService: {
+      getScriptLock: () => ({ waitLock: () => {}, releaseLock: () => {} })
+    },
+    Utilities: { getUuid: () => `run-${++uuid}` },
+    Date,
+    Number,
+    Object,
+    String,
+    Boolean,
+    JSON,
+    Array
+  });
+  return { context, values, calls, logs, statusId };
+}
+
+test('carga inicial valida período e situação antes de consultar o Bling', async () => {
+  const { context, calls } = createInitialOrdersContext({ pages: {} });
+  vm.runInContext(
+    await readFile(path.join(root, 'src/jobs/OrdersInitialLoadJob.gs'), 'utf8'),
+    context,
+    { filename: 'src/jobs/OrdersInitialLoadJob.gs' }
+  );
+
+  const invalidPeriod = vm.runInContext(
+    `PRAOrdersInitialLoad.run({ startDate: '2026-02-31', endDate: '2026-03-01' })`,
+    context
+  );
+  assert.equal(invalidPeriod.ok, false);
+  assert.equal(invalidPeriod.code, 'period_invalid');
+  assert.equal(calls.length, 0);
+
+  const missingStatus = vm.runInContext(
+    `PRAOrdersInitialLoad.run({ startDate: '2026-02-01', endDate: '2026-03-01' })`,
+    context
+  );
+  assert.equal(missingStatus.ok, false);
+  assert.equal(missingStatus.code, 'status_configuration_missing');
+  assert.equal(calls.length, 0);
+});
+
+test('carga inicial filtra Atendido, conclui páginas e guarda somente resumo', async () => {
+  const { context, values, calls, logs } = createInitialOrdersContext({
+    pages: {
+      1: { data: [{ id: 101 }, { id: 102 }] },
+      2: { data: [{ id: 103 }] }
+    }
+  });
+  values.set('BLING_STATUS_ATENDIDO_ID', '77');
+  vm.runInContext(
+    await readFile(path.join(root, 'src/jobs/OrdersInitialLoadJob.gs'), 'utf8'),
+    context,
+    { filename: 'src/jobs/OrdersInitialLoadJob.gs' }
+  );
+
+  const result = vm.runInContext(
+    `PRAOrdersInitialLoad.run({ startDate: '2026-02-01', endDate: '2026-03-01' })`,
+    context
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.status, 'completed');
+  assert.equal(result.code, 'initial_load_completed');
+  assert.equal(result.pagesFetched, 2);
+  assert.equal(result.recordsFetched, 3);
+  assert.equal(result.nextPage, 3);
+  assert.equal(calls[0]['idsSituacoes[]'], '77');
+  assert.equal(calls[0].dataInicial, '2026-02-01');
+  assert.equal(calls[0].dataFinal, '2026-03-01');
+  assert.equal(values.has('BLING_INITIAL_ORDERS_CHECKPOINT'), false);
+  const savedRun = JSON.parse(values.get('BLING_LAST_INITIAL_ORDERS_RUN'));
+  assert.equal(savedRun.recordsFetched, 3);
+  assert.doesNotMatch(JSON.stringify([result, savedRun, logs]), /101|102|103/);
+});
+
+test('carga inicial retoma da próxima página e não duplica o checkpoint', async () => {
+  const fixture = createInitialOrdersContext({
+    pages: {
+      1: { data: [{ id: 201 }, { id: 202 }] },
+      2: { data: [{ id: 203 }] }
+    },
+    maxPagesPerRun: 1
+  });
+  fixture.values.set('BLING_STATUS_ATENDIDO_ID', fixture.statusId);
+  vm.runInContext(
+    await readFile(path.join(root, 'src/jobs/OrdersInitialLoadJob.gs'), 'utf8'),
+    fixture.context,
+    { filename: 'src/jobs/OrdersInitialLoadJob.gs' }
+  );
+
+  const first = vm.runInContext(
+    `PRAOrdersInitialLoad.run({ startDate: '2026-01-01', endDate: '2026-01-31' })`,
+    fixture.context
+  );
+  assert.equal(first.status, 'in_progress');
+  assert.equal(first.nextPage, 2);
+  const checkpoint = JSON.parse(fixture.values.get('BLING_INITIAL_ORDERS_CHECKPOINT'));
+  assert.equal(checkpoint.nextPage, 2);
+
+  const second = vm.runInContext(
+    `PRAOrdersInitialLoad.run({ startDate: '2026-01-01', endDate: '2026-01-31' })`,
+    fixture.context
+  );
+  assert.equal(second.status, 'completed');
+  assert.deepEqual(fixture.calls.map((query) => Number(query.pagina)), [1, 2]);
+  assert.equal(fixture.values.has('BLING_INITIAL_ORDERS_CHECKPOINT'), false);
+});
+
+test('falha de página preserva o checkpoint sem avançar', async () => {
+  const fixture = createInitialOrdersContext({
+    pages: { 1: { error: 'service_unavailable', statusCode: 503 } }
+  });
+  fixture.values.set('BLING_STATUS_ATENDIDO_ID', fixture.statusId);
+  vm.runInContext(
+    await readFile(path.join(root, 'src/jobs/OrdersInitialLoadJob.gs'), 'utf8'),
+    fixture.context,
+    { filename: 'src/jobs/OrdersInitialLoadJob.gs' }
+  );
+
+  const result = vm.runInContext(
+    `PRAOrdersInitialLoad.run({ startDate: '2026-01-01', endDate: '2026-01-31' })`,
+    fixture.context
+  );
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'page_fetch_failed');
+  assert.equal(result.nextPage, 1);
+  const checkpoint = JSON.parse(fixture.values.get('BLING_INITIAL_ORDERS_CHECKPOINT'));
+  assert.equal(checkpoint.nextPage, 1);
+  assert.equal(checkpoint.pagesFetched, 0);
+  assert.equal(checkpoint.recordsFetched, 0);
 });
