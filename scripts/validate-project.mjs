@@ -12,6 +12,7 @@ const requiredFiles = [
   'config/script-properties.example.json',
   'docs/adr/ADR-001-decisoes-fundacao.md',
   'docs/bling-api-mapping.md',
+  'docs/http-client.md',
   'docs/oauth-authorization.md',
   'docs/token-renewal.md',
   'docs/samples/bling/product-detail-with-variations.json',
@@ -25,6 +26,7 @@ const requiredFiles = [
   'src/Main.gs',
   'src/config/Config.gs',
   'src/config/Secrets.gs',
+  'src/clients/BlingClient.gs',
   'src/core/Logger.gs',
   'src/services/OAuthService.gs'
 ];
