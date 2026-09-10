@@ -28,6 +28,8 @@
 | `BLING_BACKOFF_MAX_MS` | Não | Não | Teto da espera progressiva; padrão: `8000` ms. |
 | `BLING_MAX_PAGES` | Não | Não | Limite de segurança por listagem; padrão: `1000`. |
 | `BLING_NEXT_REQUEST_AT` | Gerenciada | Não | Reserva interna do próximo intervalo permitido entre chamadas. |
+| `BLING_LAST_SUCCESS_AT` | Gerenciada | Não | Horário ISO da última chamada mínima concluída com sucesso. |
+| `BLING_LAST_SUCCESS_CORRELATION_ID` | Gerenciada | Não | Identificador seguro da última chamada mínima bem-sucedida. |
 | `BLING_STATUS_ATENDIDO_ID` | Antes da coleta | Não | ID técnico da situação válida de venda. |
 | `DATA_SPREADSHEET_ID` | Antes da persistência | Não | Identifica a base de dados do MVP. |
 | `SYNC_TIMEZONE` | Não | Não | Padrão: `America/Sao_Paulo`. |
@@ -60,15 +62,17 @@ Referências oficiais:
 
 ## Diagnóstico seguro
 
-O health check pode retornar:
+O health check diferencia três estados operacionais:
 
-- nomes de propriedades ausentes ou inválidas;
-- presença de access token e refresh token;
-- instante de expiração e indicador `expired`;
-- estado geral `configured` e `authenticated`.
+- `authorized`: token válido e consulta mínima ao Bling concluída;
+- `expired`: token expirado, próximo da expiração ou recusado com HTTP 401;
+- `unavailable`: configuração/autorização ausente ou serviço indisponível.
+
+O retorno inclui horário, `correlationId` e o último acesso bem-sucedido, além dos indicadores públicos de configuração e presença dos tokens.
 
 Ele nunca retorna Client ID, Client Secret, access token ou refresh token.
 
+O contrato e a validação manual estão em [`connectivity-health.md`](connectivity-health.md).
 O passo a passo completo de implantação e primeira autorização está em [`oauth-authorization.md`](oauth-authorization.md).
 O fluxo de renovação automática e seu teste manual seguro estão em [`token-renewal.md`](token-renewal.md).
 O paginador, o limitador de chamadas e as retentativas estão em [`pagination-resilience.md`](pagination-resilience.md).

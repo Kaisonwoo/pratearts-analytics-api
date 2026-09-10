@@ -702,12 +702,188 @@ test('BlingClient padroniza 4xx, 5xx e falhas de rede sem vazar respostas', asyn
 test('teste manual do Bling retorna somente metadados seguros', async () => {
   const main = await readFile(path.join(root, 'src/Main.gs'), 'utf8');
   const client = await readFile(path.join(root, 'src/clients/BlingClient.gs'), 'utf8');
+  const health = await readFile(path.join(root, 'src/services/HealthService.gs'), 'utf8');
 
   assert.match(main, /function testBlingApiConnection\(\)/);
-  assert.match(main, /PRABlingClient\.probe\(\)/);
+  assert.match(main, /PRAHealthService\.checkBlingConnectivity\(\)/);
+  assert.match(health, /PRABlingClient\.probe\(\)/);
   assert.match(client, /get\('\/produtos', \{ pagina: 1, limite: 1 \}/);
   assert.match(client, /recordCount:/);
   assert.doesNotMatch(client, /console\.log\([^)]*(?:data|body|response)/i);
+});
+
+test('diagnóstico autorizado grava o último sucesso sob lock sem expor dados', async () => {
+  const values = new Map();
+  const lockEvents = [];
+  const scriptProperties = {
+    getProperty: (key) => values.has(key) ? values.get(key) : null,
+    setProperties: (items) => Object.entries(items).forEach(([key, value]) => values.set(key, value))
+  };
+  const context = vm.createContext({
+    PRAConfig: {
+      KEYS: {
+        BLING_LAST_SUCCESS_AT: 'BLING_LAST_SUCCESS_AT',
+        BLING_LAST_SUCCESS_CORRELATION_ID: 'BLING_LAST_SUCCESS_CORRELATION_ID'
+      },
+      getPublicSnapshot: () => ({ validation: { valid: true } })
+    },
+    PRABlingClient: {
+      getSecurityStatus: () => ({
+        configured: true,
+        authenticated: true,
+        token: { accessTokenPresent: true, refreshTokenPresent: true, expired: false }
+      }),
+      probe: () => ({
+        ok: true,
+        code: 'connected',
+        statusCode: 200,
+        correlationId: 'correlation-authorized-001',
+        checkedAt: '2026-09-10T02:25:38.326Z',
+        recordCount: 1,
+        data: [{ id: 'produto-que-nao-pode-aparecer' }]
+      })
+    },
+    PropertiesService: { getScriptProperties: () => scriptProperties },
+    LockService: {
+      getScriptLock: () => ({
+        waitLock: (milliseconds) => lockEvents.push(['wait', milliseconds]),
+        releaseLock: () => lockEvents.push(['release'])
+      })
+    },
+    Utilities: { getUuid: () => 'correlation-local-001' },
+    Date,
+    Number,
+    Object,
+    String,
+    Boolean
+  });
+
+  vm.runInContext(
+    await readFile(path.join(root, 'src/services/HealthService.gs'), 'utf8'),
+    context,
+    { filename: 'src/services/HealthService.gs' }
+  );
+
+  const result = vm.runInContext('PRAHealthService.checkBlingConnectivity()', context);
+  assert.equal(result.state, 'authorized');
+  assert.equal(result.code, 'connected');
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.checkedAt, '2026-09-10T02:25:38.326Z');
+  assert.equal(result.correlationId, 'correlation-authorized-001');
+  assert.equal(result.lastSuccessfulAt, result.checkedAt);
+  assert.equal(result.lastSuccessfulCorrelationId, result.correlationId);
+  assert.equal(values.get('BLING_LAST_SUCCESS_AT'), result.checkedAt);
+  assert.equal(values.get('BLING_LAST_SUCCESS_CORRELATION_ID'), result.correlationId);
+  assert.deepEqual(lockEvents, [['wait', 30000], ['release']]);
+  assert.doesNotMatch(JSON.stringify(result), /produto-que-nao-pode-aparecer|accessToken|refreshToken/);
+});
+
+test('diagnóstico expirado não consulta o Bling e preserva o último sucesso', async () => {
+  const values = new Map([
+    ['BLING_LAST_SUCCESS_AT', '2026-09-09T21:00:00.000Z'],
+    ['BLING_LAST_SUCCESS_CORRELATION_ID', 'correlation-previous-001']
+  ]);
+  let probeCount = 0;
+  const context = vm.createContext({
+    PRAConfig: {
+      KEYS: {
+        BLING_LAST_SUCCESS_AT: 'BLING_LAST_SUCCESS_AT',
+        BLING_LAST_SUCCESS_CORRELATION_ID: 'BLING_LAST_SUCCESS_CORRELATION_ID'
+      }
+    },
+    PRABlingClient: {
+      getSecurityStatus: () => ({
+        configured: true,
+        authenticated: false,
+        token: { accessTokenPresent: true, refreshTokenPresent: true, expired: true }
+      }),
+      probe: () => { probeCount += 1; }
+    },
+    PropertiesService: {
+      getScriptProperties: () => ({
+        getProperty: (key) => values.has(key) ? values.get(key) : null,
+        setProperties: () => assert.fail('não deve gravar em estado expirado')
+      })
+    },
+    LockService: { getScriptLock: () => assert.fail('não deve obter lock em estado expirado') },
+    Utilities: { getUuid: () => 'correlation-expired-001' },
+    Date,
+    Number,
+    Object,
+    String,
+    Boolean
+  });
+
+  vm.runInContext(
+    await readFile(path.join(root, 'src/services/HealthService.gs'), 'utf8'),
+    context,
+    { filename: 'src/services/HealthService.gs' }
+  );
+
+  const result = vm.runInContext('PRAHealthService.checkBlingConnectivity()', context);
+  assert.equal(result.state, 'expired');
+  assert.equal(result.code, 'token_expired_or_expiring');
+  assert.equal(result.correlationId, 'correlation-expired-001');
+  assert.equal(result.lastSuccessfulAt, '2026-09-09T21:00:00.000Z');
+  assert.equal(result.lastSuccessfulCorrelationId, 'correlation-previous-001');
+  assert.equal(probeCount, 0);
+});
+
+test('diagnóstico indisponível preserva a evidência do último acesso autorizado', async () => {
+  const values = new Map([
+    ['BLING_LAST_SUCCESS_AT', '2026-09-09T21:00:00.000Z'],
+    ['BLING_LAST_SUCCESS_CORRELATION_ID', 'correlation-previous-001']
+  ]);
+  const context = vm.createContext({
+    PRAConfig: {
+      KEYS: {
+        BLING_LAST_SUCCESS_AT: 'BLING_LAST_SUCCESS_AT',
+        BLING_LAST_SUCCESS_CORRELATION_ID: 'BLING_LAST_SUCCESS_CORRELATION_ID'
+      }
+    },
+    PRABlingClient: {
+      getSecurityStatus: () => ({
+        configured: true,
+        authenticated: true,
+        token: { accessTokenPresent: true, refreshTokenPresent: true, expired: false }
+      }),
+      probe: () => ({
+        ok: false,
+        code: 'service_unavailable',
+        statusCode: 503,
+        correlationId: 'correlation-unavailable-001',
+        checkedAt: '2026-09-10T02:30:00.000Z'
+      })
+    },
+    PropertiesService: {
+      getScriptProperties: () => ({
+        getProperty: (key) => values.has(key) ? values.get(key) : null,
+        setProperties: () => assert.fail('não deve gravar em estado indisponível')
+      })
+    },
+    LockService: { getScriptLock: () => assert.fail('não deve obter lock em falha') },
+    Utilities: { getUuid: () => 'correlation-local-002' },
+    Date,
+    Number,
+    Object,
+    String,
+    Boolean
+  });
+
+  vm.runInContext(
+    await readFile(path.join(root, 'src/services/HealthService.gs'), 'utf8'),
+    context,
+    { filename: 'src/services/HealthService.gs' }
+  );
+
+  const result = vm.runInContext('PRAHealthService.checkBlingConnectivity()', context);
+  assert.equal(result.state, 'unavailable');
+  assert.equal(result.code, 'service_unavailable');
+  assert.equal(result.statusCode, 503);
+  assert.equal(result.checkedAt, '2026-09-10T02:30:00.000Z');
+  assert.equal(result.correlationId, 'correlation-unavailable-001');
+  assert.equal(result.lastSuccessfulAt, '2026-09-09T21:00:00.000Z');
+  assert.equal(result.lastSuccessfulCorrelationId, 'correlation-previous-001');
 });
 
 test('configuração de paginação e resiliência usa padrões seguros e limites válidos', async () => {
@@ -744,6 +920,8 @@ test('configuração de paginação e resiliência usa padrões seguros e limite
   assert.equal(vm.runInContext('PRAConfig.validate().valid', context), true);
   const snapshot = vm.runInContext('PRAConfig.getPublicSnapshot()', context);
   assert.equal('BLING_NEXT_REQUEST_AT' in snapshot.configuredProperties, false);
+  assert.equal('BLING_LAST_SUCCESS_AT' in snapshot.configuredProperties, false);
+  assert.equal('BLING_LAST_SUCCESS_CORRELATION_ID' in snapshot.configuredProperties, false);
 
   values.set('BLING_REQUESTS_PER_SECOND', '4');
   const invalid = vm.runInContext('PRAConfig.validate()', context);

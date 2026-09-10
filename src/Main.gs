@@ -29,7 +29,7 @@ function refreshBlingAccessToken() {
  * @return {Object} Resultado seguro do teste de conectividade.
  */
 function testBlingApiConnection() {
-  return PRABlingClient.probe();
+  return PRAHealthService.checkBlingConnectivity();
 }
 
 /**
