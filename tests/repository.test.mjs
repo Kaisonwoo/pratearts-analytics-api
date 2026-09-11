@@ -918,9 +918,12 @@ test('configuração de paginação e resiliência usa padrões seguros e limite
   assert.equal(policy.backoffMaxMs, 8000);
   assert.equal(policy.maxPages, 1000);
   assert.equal(policy.maxPagesPerRun, 10);
+  assert.equal(policy.maxOrderDetailsPerRun, 20);
   assert.equal(vm.runInContext('PRAConfig.validate().valid', context), true);
   const snapshot = vm.runInContext('PRAConfig.getPublicSnapshot()', context);
   assert.equal('BLING_MAX_PAGES_PER_RUN' in snapshot.configuredProperties, true);
+  assert.equal('BLING_MAX_ORDER_DETAILS_PER_RUN' in snapshot.configuredProperties, true);
+  assert.equal('BLING_ORDER_DETAILS_QUEUE_INDEX' in snapshot.configuredProperties, false);
   assert.equal('BLING_NEXT_REQUEST_AT' in snapshot.configuredProperties, false);
   assert.equal('BLING_LAST_SUCCESS_AT' in snapshot.configuredProperties, false);
   assert.equal('BLING_LAST_SUCCESS_CORRELATION_ID' in snapshot.configuredProperties, false);
@@ -1397,4 +1400,369 @@ test('falha de página preserva o checkpoint sem avançar', async () => {
   assert.equal(checkpoint.nextPage, 1);
   assert.equal(checkpoint.pagesFetched, 0);
   assert.equal(checkpoint.recordsFetched, 0);
+});
+
+function createOrderDetailsQueueContext() {
+  const values = new Map();
+  let uuid = 0;
+  const scriptProperties = {
+    getProperty: (key) => values.has(key) ? values.get(key) : null,
+    setProperty: (key, value) => values.set(key, value),
+    setProperties: (items) => Object.entries(items).forEach(([key, value]) => values.set(key, value)),
+    deleteProperty: (key) => values.delete(key)
+  };
+  const context = vm.createContext({
+    PRAConfig: {
+      KEYS: { BLING_ORDER_DETAILS_QUEUE_INDEX: 'BLING_ORDER_DETAILS_QUEUE_INDEX' }
+    },
+    PropertiesService: { getScriptProperties: () => scriptProperties },
+    LockService: {
+      getScriptLock: () => ({ waitLock: () => {}, releaseLock: () => {} })
+    },
+    Utilities: { getUuid: () => `queue-${++uuid}` },
+    Date,
+    Number,
+    Object,
+    String,
+    Boolean,
+    JSON,
+    Array
+  });
+  return { context, values };
+}
+
+test('fila de detalhes fragmenta páginas, deduplica IDs e não persiste payloads', async () => {
+  const fixture = createOrderDetailsQueueContext();
+  vm.runInContext(
+    await readFile(path.join(root, 'src/jobs/OrderDetailsQueue.gs'), 'utf8'),
+    fixture.context,
+    { filename: 'src/jobs/OrderDetailsQueue.gs' }
+  );
+
+  const first = vm.runInContext(`PRAOrderDetailsQueue.enqueuePage([
+    { id: 101, contato: { nome: 'CLIENTE NAO DEVE SER SALVO' } },
+    { id: 102, itens: [{ codigo: 'SKU-NAO-DEVE-SER-SALVO' }] }
+  ], 1, { runId: 'run-seguro' })`, fixture.context);
+  const duplicate = vm.runInContext(`PRAOrderDetailsQueue.enqueuePage([
+    { id: 101 }, { id: 102 }
+  ], 1, { runId: 'run-seguro' })`, fixture.context);
+  const second = vm.runInContext(`PRAOrderDetailsQueue.enqueuePage([
+    { id: 102 }, { id: 103 }
+  ], 2, { runId: 'run-seguro' })`, fixture.context);
+
+  assert.equal(first.added, 2);
+  assert.equal(duplicate.added, 0);
+  assert.equal(second.added, 1);
+  assert.equal(second.pending, 3);
+  assert.doesNotMatch(JSON.stringify([...fixture.values]), /CLIENTE|SKU-NAO/);
+
+  const initialBatch = vm.runInContext('PRAOrderDetailsQueue.peek(2)', fixture.context);
+  assert.deepEqual(Array.from(initialBatch, (entry) => String(entry.id)), ['101', '102']);
+  vm.runInContext(`PRAOrderDetailsQueue.acknowledge([
+    { id: 101, status: 'success' },
+    { id: 102, status: 'retryable_failure' }
+  ])`, fixture.context);
+  const nextBatch = vm.runInContext('PRAOrderDetailsQueue.peek(2)', fixture.context);
+  assert.deepEqual(Array.from(nextBatch, (entry) => String(entry.id)), ['103', '102']);
+  assert.equal(Number(nextBatch[1].attempts), 1);
+});
+
+test('coletor de detalhes preserva campos de itens e registra erro permanente', async () => {
+  const calls = [];
+  const persisted = [];
+  const acknowledgements = [];
+  const logs = [];
+  const context = vm.createContext({
+    PRAConfig: {
+      KEYS: { DATA_SPREADSHEET_ID: 'DATA_SPREADSHEET_ID' },
+      getRequestPolicy: () => ({ maxOrderDetailsPerRun: 20 }),
+      getPublicValue: () => 'spreadsheet-test'
+    },
+    PRAOrderDetailsQueue: {
+      peek: () => [{ id: '101', attempts: 0 }, { id: '102', attempts: 1 }],
+      getSummary: () => ({ pending: 2 }),
+      acknowledge: (outcomes) => {
+        acknowledgements.push(outcomes);
+        return { pending: 0 };
+      }
+    },
+    PRABlingClient: {
+      get: (requestPath) => {
+        calls.push(requestPath);
+        if (requestPath.endsWith('/101')) {
+          return {
+            ok: true,
+            statusCode: 200,
+            correlationId: 'corr-success',
+            data: {
+              id: 101,
+              itens: [{
+                id: 501,
+                codigo: 'SKU-TESTE',
+                quantidade: 2,
+                valor: 19.9,
+                desconto: 1,
+                produto: { id: 9001 }
+              }]
+            }
+          };
+        }
+        return {
+          ok: false,
+          statusCode: 404,
+          correlationId: 'corr-not-found',
+          error: { code: 'not_found', retryable: false }
+        };
+      }
+    },
+    PRAOrderDetailsStore: {
+      persistBatch: (details, failures, metadata) => {
+        persisted.push({ details, failures, metadata });
+        return {
+          ordersStored: details.length,
+          itemsStored: details.flatMap((detail) => detail.itens).length,
+          errorsStored: failures.length,
+          updatedAt: '2026-09-11T15:00:00.000Z'
+        };
+      }
+    },
+    PRALogger: {
+      info: (event, metadata) => logs.push({ event, metadata }),
+      error: (event, metadata) => logs.push({ event, metadata })
+    },
+    Utilities: { getUuid: () => 'detail-run-1' },
+    Date,
+    Number,
+    Object,
+    String,
+    Boolean,
+    Array,
+    JSON
+  });
+  vm.runInContext(
+    await readFile(path.join(root, 'src/jobs/OrderDetailsJob.gs'), 'utf8'),
+    context,
+    { filename: 'src/jobs/OrderDetailsJob.gs' }
+  );
+
+  const result = vm.runInContext('PRAOrderDetailsJob.run({ maxOrders: 2 })', context);
+  assert.deepEqual(calls, ['/pedidos/vendas/101', '/pedidos/vendas/102']);
+  assert.equal(persisted[0].details[0].itens[0].codigo, 'SKU-TESTE');
+  assert.equal(persisted[0].details[0].itens[0].produto.id, 9001);
+  assert.equal(persisted[0].details[0].itens[0].quantidade, 2);
+  assert.equal(persisted[0].details[0].itens[0].valor, 19.9);
+  assert.equal(persisted[0].details[0].itens[0].desconto, 1);
+  assert.equal(persisted[0].failures[0].errorCode, 'not_found');
+  assert.equal(acknowledgements[0][1].status, 'permanent_failure');
+  assert.equal(result.status, 'completed_with_errors');
+  assert.equal(result.ordersStored, 1);
+  assert.equal(result.itemsStored, 1);
+  assert.equal(result.errorsStored, 1);
+  assert.doesNotMatch(JSON.stringify([result, logs]), /SKU-TESTE|9001|corr-not-found/);
+});
+
+test('falha retomável permanece na fila e falha de armazenamento não confirma lote', async () => {
+  let acknowledgeCalls = 0;
+  let storageShouldFail = false;
+  const context = vm.createContext({
+    PRAConfig: {
+      KEYS: { DATA_SPREADSHEET_ID: 'DATA_SPREADSHEET_ID' },
+      getRequestPolicy: () => ({ maxOrderDetailsPerRun: 20 }),
+      getPublicValue: () => 'spreadsheet-test'
+    },
+    PRAOrderDetailsQueue: {
+      peek: () => [{ id: '201', attempts: 0 }],
+      getSummary: () => ({ pending: 1 }),
+      acknowledge: (outcomes) => {
+        acknowledgeCalls += 1;
+        assert.equal(outcomes[0].status, 'retryable_failure');
+        return { pending: 1 };
+      }
+    },
+    PRABlingClient: {
+      get: () => ({
+        ok: false,
+        statusCode: 503,
+        correlationId: 'corr-retry',
+        error: { code: 'service_unavailable', retryable: true }
+      })
+    },
+    PRAOrderDetailsStore: {
+      persistBatch: (_details, failures) => {
+        if (storageShouldFail) throw new Error('storage unavailable');
+        return {
+          ordersStored: 0,
+          itemsStored: 0,
+          errorsStored: failures.length,
+          updatedAt: '2026-09-11T15:00:00.000Z'
+        };
+      }
+    },
+    PRALogger: { info: () => {}, error: () => {} },
+    Utilities: { getUuid: () => 'detail-run-2' },
+    Date,
+    Number,
+    Object,
+    String,
+    Boolean,
+    Array,
+    JSON
+  });
+  vm.runInContext(
+    await readFile(path.join(root, 'src/jobs/OrderDetailsJob.gs'), 'utf8'),
+    context,
+    { filename: 'src/jobs/OrderDetailsJob.gs' }
+  );
+
+  const retry = vm.runInContext('PRAOrderDetailsJob.run({ maxOrders: 1 })', context);
+  assert.equal(retry.status, 'in_progress');
+  assert.equal(retry.retryableFailures, 1);
+  assert.equal(retry.pending, 1);
+  assert.equal(acknowledgeCalls, 1);
+
+  storageShouldFail = true;
+  const failedStore = vm.runInContext('PRAOrderDetailsJob.run({ maxOrders: 1 })', context);
+  assert.equal(failedStore.ok, false);
+  assert.equal(failedStore.code, 'order_details_storage_failed');
+  assert.equal(acknowledgeCalls, 1);
+});
+
+class FakeRange {
+  constructor(sheet, row, column, rowCount, columnCount) {
+    this.sheet = sheet;
+    this.row = row;
+    this.column = column;
+    this.rowCount = rowCount;
+    this.columnCount = columnCount;
+  }
+
+  getValues() {
+    return Array.from({ length: this.rowCount }, (_, rowOffset) =>
+      Array.from({ length: this.columnCount }, (_, columnOffset) =>
+        this.sheet.rows[this.row - 1 + rowOffset]?.[this.column - 1 + columnOffset] ?? ''
+      )
+    );
+  }
+
+  setValues(values) {
+    values.forEach((row, rowOffset) => {
+      const targetRow = this.row - 1 + rowOffset;
+      if (!this.sheet.rows[targetRow]) this.sheet.rows[targetRow] = [];
+      row.forEach((cell, columnOffset) => {
+        this.sheet.rows[targetRow][this.column - 1 + columnOffset] = cell;
+      });
+    });
+    return this;
+  }
+
+  clearContent() {
+    for (let rowOffset = 0; rowOffset < this.rowCount; rowOffset += 1) {
+      const targetRow = this.row - 1 + rowOffset;
+      if (!this.sheet.rows[targetRow]) continue;
+      for (let columnOffset = 0; columnOffset < this.columnCount; columnOffset += 1) {
+        this.sheet.rows[targetRow][this.column - 1 + columnOffset] = '';
+      }
+    }
+    while (this.sheet.rows.length > 0 && this.sheet.rows.at(-1).every((cell) => cell === '')) {
+      this.sheet.rows.pop();
+    }
+    return this;
+  }
+}
+
+class FakeSheet {
+  constructor(name) {
+    this.name = name;
+    this.rows = [];
+  }
+
+  getLastRow() {
+    return this.rows.length;
+  }
+
+  getRange(row, column, rowCount, columnCount) {
+    return new FakeRange(this, row, column, rowCount, columnCount);
+  }
+
+  setFrozenRows() {}
+}
+
+class FakeSpreadsheet {
+  constructor() {
+    this.sheets = new Map();
+  }
+
+  getSheetByName(name) {
+    return this.sheets.get(name) || null;
+  }
+
+  insertSheet(name) {
+    const sheet = new FakeSheet(name);
+    this.sheets.set(name, sheet);
+    return sheet;
+  }
+}
+
+test('armazenamento substitui pedido e itens pela chave sem duplicação', async () => {
+  const spreadsheet = new FakeSpreadsheet();
+  const context = vm.createContext({
+    PRAConfig: {
+      KEYS: { DATA_SPREADSHEET_ID: 'DATA_SPREADSHEET_ID' },
+      requirePublicValue: () => 'spreadsheet-test'
+    },
+    SpreadsheetApp: { openById: () => spreadsheet },
+    LockService: {
+      getScriptLock: () => ({ waitLock: () => {}, releaseLock: () => {} })
+    },
+    Date,
+    Number,
+    Object,
+    String,
+    Boolean,
+    Array,
+    JSON
+  });
+  vm.runInContext(
+    await readFile(path.join(root, 'src/repositories/OrderDetailsStore.gs'), 'utf8'),
+    context,
+    { filename: 'src/repositories/OrderDetailsStore.gs' }
+  );
+
+  vm.runInContext(`PRAOrderDetailsStore.persistBatch([{
+    id: 301,
+    numero: 7001,
+    data: '2026-08-01',
+    situacao: { id: 9 },
+    totalProdutos: 30,
+    total: 35,
+    itens: [
+      { id: 801, codigo: 'SKU-A', quantidade: 1, valor: 10, desconto: 0, produto: { id: 901 } },
+      { id: 802, codigo: 'SKU-B', quantidade: 2, valor: 10, desconto: 0, produto: { id: 902 } }
+    ]
+  }], [], { runId: 'run-a' })`, context);
+
+  vm.runInContext(`PRAOrderDetailsStore.persistBatch([{
+    id: 301,
+    numero: 7001,
+    data: '2026-08-01',
+    situacao: { id: 9 },
+    totalProdutos: 18,
+    total: 18,
+    itens: [
+      { id: 801, codigo: 'SKU-A', quantidade: 2, valor: 9, desconto: 1, produto: { id: 901 } }
+    ]
+  }], [], { runId: 'run-b' })`, context);
+
+  const orders = spreadsheet.getSheetByName('raw_orders').rows;
+  const items = spreadsheet.getSheetByName('raw_order_items').rows;
+  assert.equal(orders.length, 2);
+  assert.equal(items.length, 2);
+  assert.equal(String(items[1][0]), '301:801');
+  assert.equal(String(items[1][1]), '301');
+  assert.equal(String(items[1][3]), '901');
+  assert.equal(items[1][4], 'SKU-A');
+  assert.equal(items[1][6], 2);
+  assert.equal(items[1][7], 9);
+  assert.equal(items[1][8], 1);
+  assert.equal(items[1][11], 'run-b');
 });

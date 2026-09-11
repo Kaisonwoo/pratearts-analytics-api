@@ -43,6 +43,12 @@ checkpoint apenas após cada página ser aceita pelo armazenamento. O último
 checkpoint válido permite retomar a partir da página seguinte sem duplicar a
 confirmação do lote anterior.
 
+As páginas confirmadas alimentam `PRAOrderDetailsQueue` somente com IDs
+técnicos. `PRAOrderDetailsJob` consulta os detalhes em lotes e confirma a saída
+da fila após `PRAOrderDetailsStore` substituir o pedido e seus itens pela chave
+estável. Falhas temporárias permanecem na fila; falhas permanentes ficam
+registradas sem payloads ou dados pessoais.
+
 ## Princípios
 
 - Segurança por padrão.

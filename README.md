@@ -4,7 +4,7 @@ Integração analítica para transformar dados operacionais do Bling em relatór
 
 ## Estado atual
 
-O Sprint 0 — Fundação foi concluído. O projeto está no Sprint 1 — Acesso ao Bling, com OAuth 2.0 validado, renovação automática dos tokens e diagnóstico seguro de conectividade em implementação.
+Os Sprints 0 e 1 foram concluídos. O projeto está no Sprint 2 — Coleta e persistência, com a carga paginada de pedidos Atendidos integrada e a coleta retomável de detalhes e itens em implementação.
 
 ## Decisões do MVP
 
@@ -36,6 +36,7 @@ src/
   config/       Leitura de configurações seguras
   core/         Erros e logging compartilhados
   jobs/         Rotinas agendadas
+  repositories/ Persistência idempotente no Google Sheets
   services/     Regras de aplicação
   appsscript.json
 tests/          Testes locais de estrutura e segurança
@@ -91,6 +92,8 @@ Para consultar listagens completas com paginação, ritmo controlado e backoff e
 
 Para interpretar os estados de conectividade e o registro do último acesso bem-sucedido, consulte [`docs/connectivity-health.md`](docs/connectivity-health.md).
 
+Para executar a carga inicial e a coleta retomável dos detalhes, consulte [`docs/orders-initial-load.md`](docs/orders-initial-load.md) e [`docs/order-details.md`](docs/order-details.md).
+
 Nunca envie ao GitHub:
 
 - `client_secret`;
@@ -118,6 +121,8 @@ Esse comando valida a estrutura, o manifesto e padrões comuns de vazamento de s
 - Cliente HTTP autenticado: PRA-13 / US-007 e PRA-45 / TT-007
 - Paginação, limites e retentativas: PRA-14 / US-008 e PRA-49 / TT-008
 - Diagnóstico de conectividade: PRA-15 / US-009 e PRA-52 / TT-009
+- Carga inicial de pedidos Atendidos: PRA-17 / US-010 e PRA-50 / TT-010
+- Detalhes e itens dos pedidos: PRA-18 / US-011 e PRA-51 / TT-011
 
 ## Referências oficiais
 
