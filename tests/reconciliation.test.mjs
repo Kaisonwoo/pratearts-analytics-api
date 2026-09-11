@@ -113,7 +113,7 @@ test('reconciliação usa janela configurável e marca intervalo afetado', async
   assert.equal(result.windowStart, '2026-09-07');
   assert.equal(result.windowEnd, '2026-09-11');
   assert.equal(result.recordsFetched, 3);
-  assert.deepEqual(f.calls.map((call) => call.query), [
+  assert.deepEqual(JSON.parse(JSON.stringify(f.calls.map((call) => call.query))), [
     { dataInicial: '2026-09-07', dataFinal: '2026-09-11', pagina: 1, limite: 2 },
     { dataInicial: '2026-09-07', dataFinal: '2026-09-11', pagina: 2, limite: 2 }
   ]);
