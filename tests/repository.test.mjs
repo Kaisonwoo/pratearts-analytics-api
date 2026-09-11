@@ -923,6 +923,8 @@ test('configuração de paginação e resiliência usa padrões seguros e limite
   const snapshot = vm.runInContext('PRAConfig.getPublicSnapshot()', context);
   assert.equal('BLING_MAX_PAGES_PER_RUN' in snapshot.configuredProperties, true);
   assert.equal('BLING_MAX_ORDER_DETAILS_PER_RUN' in snapshot.configuredProperties, true);
+  assert.equal('BLING_PRODUCTS_SYNC_CHECKPOINT' in snapshot.configuredProperties, false);
+  assert.equal('BLING_LAST_PRODUCTS_SYNC_RUN' in snapshot.configuredProperties, false);
   assert.equal('BLING_ORDER_DETAILS_QUEUE_INDEX' in snapshot.configuredProperties, false);
   assert.equal('BLING_NEXT_REQUEST_AT' in snapshot.configuredProperties, false);
   assert.equal('BLING_LAST_SUCCESS_AT' in snapshot.configuredProperties, false);
@@ -1765,4 +1767,215 @@ test('armazenamento substitui pedido e itens pela chave sem duplicação', async
   assert.equal(items[1][7], 9);
   assert.equal(items[1][8], 1);
   assert.equal(items[1][11], 'run-b');
+});
+
+function createProductsSyncContext({ pages, pageSize = 2, maxPages = 100, maxPagesPerRun = 10 } = {}) {
+  const values = new Map([['DATA_SPREADSHEET_ID', 'spreadsheet-test']]);
+  const calls = [];
+  const persisted = [];
+  const logs = [];
+  let uuid = 0;
+  const scriptProperties = {
+    getProperty: (key) => values.has(key) ? values.get(key) : null,
+    setProperties: (items) => Object.entries(items).forEach(([key, value]) => values.set(key, value)),
+    deleteProperty: (key) => values.delete(key)
+  };
+  const store = {
+    shouldFail: false,
+    persistPage: (products, metadata) => {
+      if (store.shouldFail) throw new Error('storage unavailable');
+      persisted.push({ products, metadata });
+      return {
+        productsStored: products.length,
+        parentLinksStored: products.filter((product) => Number(product.idProdutoPai || 0) > 0).length,
+        updatedAt: '2026-09-11T16:00:00.000Z'
+      };
+    }
+  };
+  const context = vm.createContext({
+    PRAConfig: {
+      KEYS: {
+        DATA_SPREADSHEET_ID: 'DATA_SPREADSHEET_ID',
+        BLING_PRODUCTS_SYNC_CHECKPOINT: 'BLING_PRODUCTS_SYNC_CHECKPOINT',
+        BLING_LAST_PRODUCTS_SYNC_RUN: 'BLING_LAST_PRODUCTS_SYNC_RUN'
+      },
+      getPublicValue: (key, fallback) => values.has(key) ? values.get(key) : fallback,
+      getRequestPolicy: () => ({ pageSize, maxPages, maxPagesPerRun })
+    },
+    PRABlingClient: {
+      get: (requestPath, query, metadata) => {
+        calls.push({ requestPath, query, metadata });
+        const page = Number(query.pagina);
+        const pageResult = pages[page];
+        if (pageResult && pageResult.error) {
+          return {
+            ok: false,
+            statusCode: pageResult.statusCode || 503,
+            correlationId: `products-corr-${page}`,
+            error: { code: pageResult.error }
+          };
+        }
+        return {
+          ok: true,
+          statusCode: 200,
+          correlationId: `products-corr-${page}`,
+          data: pageResult ? pageResult.data : []
+        };
+      }
+    },
+    PRAProductStore: store,
+    PRALogger: {
+      info: (event, metadata) => logs.push({ level: 'INFO', event, metadata }),
+      warn: (event, metadata) => logs.push({ level: 'WARN', event, metadata }),
+      error: (event, metadata) => logs.push({ level: 'ERROR', event, metadata })
+    },
+    PropertiesService: { getScriptProperties: () => scriptProperties },
+    LockService: {
+      getScriptLock: () => ({ waitLock: () => {}, releaseLock: () => {} })
+    },
+    Utilities: { getUuid: () => `products-run-${++uuid}` },
+    Date,
+    Number,
+    Object,
+    String,
+    Boolean,
+    JSON,
+    Array
+  });
+  return { context, values, calls, persisted, logs, store };
+}
+
+test('coleta de produtos conclui páginas e preserva relações sem expor catálogo', async () => {
+  const fixture = createProductsSyncContext({
+    pages: {
+      1: { data: [
+        { id: 1101, idProdutoPai: 0, codigo: 'SKU-PAI-TESTE' },
+        { id: 1102, idProdutoPai: 1101, codigo: 'SKU-FILHO-TESTE' }
+      ] },
+      2: { data: [{ id: 1103, idProdutoPai: 0, codigo: 'SKU-SIMPLES-TESTE' }] }
+    }
+  });
+  vm.runInContext(
+    await readFile(path.join(root, 'src/jobs/ProductsSyncJob.gs'), 'utf8'),
+    fixture.context,
+    { filename: 'src/jobs/ProductsSyncJob.gs' }
+  );
+
+  const result = vm.runInContext('PRAProductsSyncJob.run({ reset: true })', fixture.context);
+  assert.equal(result.ok, true);
+  assert.equal(result.status, 'completed');
+  assert.equal(result.code, 'products_sync_completed');
+  assert.equal(result.pagesFetched, 2);
+  assert.equal(result.recordsFetched, 3);
+  assert.equal(result.parentLinksFound, 1);
+  assert.deepEqual(fixture.calls.map((call) => call.requestPath), ['/produtos', '/produtos']);
+  assert.deepEqual(fixture.calls.map((call) => Number(call.query.pagina)), [1, 2]);
+  assert.ok(fixture.calls.every((call) => Number(call.query.limite) === 2));
+  assert.ok(fixture.calls.every((call) => call.metadata.operation === 'products.initial-sync'));
+  assert.equal(fixture.values.has('BLING_PRODUCTS_SYNC_CHECKPOINT'), false);
+  assert.equal(JSON.parse(fixture.values.get('BLING_LAST_PRODUCTS_SYNC_RUN')).recordsFetched, 3);
+  assert.doesNotMatch(JSON.stringify([result, fixture.logs, [...fixture.values]]), /1101|1102|1103|SKU-/);
+});
+
+test('coleta de produtos retoma a página e não avança após falha de persistência', async () => {
+  const fixture = createProductsSyncContext({
+    pages: {
+      1: { data: [{ id: 2101 }, { id: 2102 }] },
+      2: { data: [{ id: 2103 }] }
+    },
+    maxPagesPerRun: 1
+  });
+  vm.runInContext(
+    await readFile(path.join(root, 'src/jobs/ProductsSyncJob.gs'), 'utf8'),
+    fixture.context,
+    { filename: 'src/jobs/ProductsSyncJob.gs' }
+  );
+
+  const first = vm.runInContext('PRAProductsSyncJob.run({})', fixture.context);
+  assert.equal(first.status, 'in_progress');
+  assert.equal(first.nextPage, 2);
+  fixture.store.shouldFail = true;
+  const failed = vm.runInContext('PRAProductsSyncJob.run({})', fixture.context);
+  assert.equal(failed.ok, false);
+  assert.equal(failed.code, 'page_persistence_failed');
+  assert.equal(failed.nextPage, 2);
+  assert.equal(JSON.parse(fixture.values.get('BLING_PRODUCTS_SYNC_CHECKPOINT')).nextPage, 2);
+
+  fixture.store.shouldFail = false;
+  const resumed = vm.runInContext('PRAProductsSyncJob.run({})', fixture.context);
+  assert.equal(resumed.status, 'completed');
+  assert.equal(resumed.recordsFetched, 3);
+  assert.deepEqual(fixture.calls.map((call) => Number(call.query.pagina)), [1, 2, 2]);
+});
+
+test('coleta de produtos bloqueia no limite seguro sem retornar falso sucesso', async () => {
+  const fixture = createProductsSyncContext({
+    pages: { 1: { data: [{ id: 2201 }, { id: 2202 }] } },
+    maxPages: 1,
+    maxPagesPerRun: 2
+  });
+  vm.runInContext(
+    await readFile(path.join(root, 'src/jobs/ProductsSyncJob.gs'), 'utf8'),
+    fixture.context,
+    { filename: 'src/jobs/ProductsSyncJob.gs' }
+  );
+
+  const result = vm.runInContext('PRAProductsSyncJob.run({})', fixture.context);
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 'blocked');
+  assert.equal(result.code, 'page_limit_reached');
+  assert.equal(result.pagesFetched, 1);
+  assert.equal(result.nextPage, 2);
+});
+
+test('armazenamento de produtos mantém pai, filho e produto simples sem duplicação', async () => {
+  const spreadsheet = new FakeSpreadsheet();
+  const context = vm.createContext({
+    PRAConfig: {
+      KEYS: { DATA_SPREADSHEET_ID: 'DATA_SPREADSHEET_ID' },
+      requirePublicValue: () => 'spreadsheet-test'
+    },
+    SpreadsheetApp: { openById: () => spreadsheet },
+    LockService: {
+      getScriptLock: () => ({ waitLock: () => {}, releaseLock: () => {} })
+    },
+    Date,
+    Number,
+    Object,
+    String,
+    Boolean,
+    Array,
+    JSON
+  });
+  vm.runInContext(
+    await readFile(path.join(root, 'src/repositories/ProductStore.gs'), 'utf8'),
+    context,
+    { filename: 'src/repositories/ProductStore.gs' }
+  );
+
+  const first = vm.runInContext(`PRAProductStore.persistPage([
+    { id: 3101, idProdutoPai: 0, codigo: 'SKU-PAI', nome: 'Pai', formato: 'V' },
+    { id: 3102, idProdutoPai: 3101, codigo: 'SKU-FILHO-A', nome: 'Filho', formato: 'S' },
+    { id: 3103, idProdutoPai: 0, codigo: 'SKU-SIMPLES', nome: 'Simples', formato: 'S' }
+  ], { runId: 'products-a' })`, context);
+  assert.equal(first.productsStored, 3);
+  assert.equal(first.parentLinksStored, 1);
+
+  vm.runInContext(`PRAProductStore.persistPage([
+    { id: 3102, idProdutoPai: 3101, codigo: 'SKU-FILHO-B', nome: 'Filho atualizado', formato: 'S' }
+  ], { runId: 'products-b' })`, context);
+
+  const rows = spreadsheet.getSheetByName('raw_products').rows;
+  assert.equal(rows.length, 4);
+  const child = rows.find((row) => String(row[0]) === '3102');
+  assert.equal(String(child[1]), '3101');
+  assert.equal(child[2], 'SKU-FILHO-B');
+  assert.equal(child[10], true);
+  assert.equal(child[12], 'products-b');
+
+  const standalone = vm.runInContext('PRAProductStore.findById(3103)', context);
+  assert.equal(String(standalone.product_id), '3103');
+  assert.equal(standalone.parent_product_id, '');
+  assert.equal(standalone.sku, 'SKU-SIMPLES');
+  assert.equal(standalone.is_variation, false);
 });

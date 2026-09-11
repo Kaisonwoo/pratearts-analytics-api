@@ -49,6 +49,12 @@ da fila após `PRAOrderDetailsStore` substituir o pedido e seus itens pela chave
 estável. Falhas temporárias permanecem na fila; falhas permanentes ficam
 registradas sem payloads ou dados pessoais.
 
+O catálogo é reconciliado por `PRAProductsSyncJob` em páginas confirmadas
+somente depois da gravação idempotente em `raw_products`. A chave técnica é o
+ID do Bling, o SKU é preservado para conferência e `parent_product_id` mantém a
+relação entre variação e produto pai. Produtos sem pai permanecem disponíveis
+por seu próprio ID.
+
 ## Princípios
 
 - Segurança por padrão.
