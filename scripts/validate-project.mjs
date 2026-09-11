@@ -16,6 +16,7 @@ const requiredFiles = [
   'docs/http-client.md',
   'docs/order-details.md',
   'docs/products-sync.md',
+  'docs/product-suppliers-sync.md',
   'docs/oauth-authorization.md',
   'docs/pagination-resilience.md',
   'docs/token-renewal.md',
@@ -38,8 +39,10 @@ const requiredFiles = [
   'src/jobs/OrderDetailsQueue.gs',
   'src/jobs/OrdersInitialLoadJob.gs',
   'src/jobs/ProductsSyncJob.gs',
+  'src/jobs/ProductSuppliersSyncJob.gs',
   'src/repositories/OrderDetailsStore.gs',
   'src/repositories/ProductStore.gs',
+  'src/repositories/ProductSupplierStore.gs',
   'src/services/HealthService.gs',
   'src/services/OAuthService.gs'
 ];

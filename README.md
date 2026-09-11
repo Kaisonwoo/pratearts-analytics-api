@@ -4,7 +4,7 @@ Integração analítica para transformar dados operacionais do Bling em relatór
 
 ## Estado atual
 
-Os Sprints 0 e 1 foram concluídos. O projeto está no Sprint 2 — Coleta e persistência, com pedidos, detalhes e itens integrados e a reconciliação retomável de produtos em desenvolvimento.
+Os Sprints 0 e 1 foram concluídos. O projeto está no Sprint 2 — Coleta e persistência, com pedidos, detalhes, itens e produtos integrados e a reconciliação retomável dos vínculos produto-fornecedor em implementação.
 
 ## Decisões do MVP
 
@@ -96,6 +96,8 @@ Para executar a carga inicial e a coleta retomável dos detalhes, consulte [`doc
 
 Para reconciliar produtos, SKUs e relações pai/filho, consulte [`docs/products-sync.md`](docs/products-sync.md).
 
+Para reconciliar vínculos produto-fornecedor, sinalizar ausência ou múltiplos fornecedores e configurar a regra de fornecedor principal, consulte [`docs/product-suppliers-sync.md`](docs/product-suppliers-sync.md).
+
 Nunca envie ao GitHub:
 
 - `client_secret`;
@@ -126,6 +128,7 @@ Esse comando valida a estrutura, o manifesto e padrões comuns de vazamento de s
 - Carga inicial de pedidos Atendidos: PRA-17 / US-010 e PRA-50 / TT-010
 - Detalhes e itens dos pedidos: PRA-18 / US-011 e PRA-51 / TT-011
 - Produtos e relações pai/filho: PRA-16 / US-012 e PRA-53 / TT-012
+- Vínculos produto-fornecedor: PRA-20 / US-013 e PRA-54 / TT-013
 
 ## Referências oficiais
 

@@ -80,3 +80,13 @@ function runOrderDetailsBatch(maxOrders) {
 function runProductsSync(reset) {
   return PRAProductsSyncJob.run({ reset: Boolean(reset) });
 }
+
+/**
+ * Executa ou retoma a reconciliação completa dos vínculos produto-fornecedor.
+ * Sinaliza ausência e multiplicidade e aplica a regra configurada de fornecedor principal.
+ * @param {boolean} reset Reinicia o checkpoint da reconciliação quando true.
+ * @return {Object} Resumo operacional seguro da execução.
+ */
+function runProductSuppliersSync(reset) {
+  return PRAProductSuppliersSyncJob.run({ reset: Boolean(reset) });
+}

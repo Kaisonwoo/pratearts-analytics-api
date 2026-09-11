@@ -8,6 +8,10 @@ var PRAOrdersInitialLoad = (function () {
     return PropertiesService.getScriptProperties();
   }
 
+  function nowIso_() {
+    return new Date().toISOString().replace(/\.\d{3}Z$/, '.000Z');
+  }
+
   function safeDate_(value) {
     var candidate = String(value || '');
     if (!DATE_PATTERN.test(candidate)) return null;
@@ -116,8 +120,8 @@ var PRAOrdersInitialLoad = (function () {
       nextPage: 1,
       pagesFetched: 0,
       recordsFetched: 0,
-      startedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      startedAt: nowIso_(),
+      updatedAt: nowIso_()
     };
   }
 
@@ -264,7 +268,7 @@ var PRAOrdersInitialLoad = (function () {
       current.pagesFetched += 1;
       current.recordsFetched += pageResult.data.length;
       current.nextPage += 1;
-      current.updatedAt = new Date().toISOString();
+      current.updatedAt = nowIso_();
       pagesThisRun += 1;
 
       if (pageResult.data.length < current.pageSize) {
