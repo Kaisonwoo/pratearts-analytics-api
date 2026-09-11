@@ -70,3 +70,13 @@ function runInitialOrdersLoad(startDate, endDate, reset) {
 function runOrderDetailsBatch(maxOrders) {
   return PRAOrderDetailsJob.run({ maxOrders: maxOrders });
 }
+
+/**
+ * Executa ou retoma a reconciliação completa do catálogo de produtos.
+ * Persiste IDs, SKUs e relações pai/filho sem expor o catálogo nos logs.
+ * @param {boolean} reset Reinicia o checkpoint da reconciliação quando true.
+ * @return {Object} Resumo operacional seguro da execução.
+ */
+function runProductsSync(reset) {
+  return PRAProductsSyncJob.run({ reset: Boolean(reset) });
+}
