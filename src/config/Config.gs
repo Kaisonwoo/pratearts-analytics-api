@@ -26,6 +26,9 @@ var PRAConfig = (function () {
     BLING_ORDER_DETAILS_QUEUE_INDEX: 'BLING_ORDER_DETAILS_QUEUE_INDEX',
     BLING_PRODUCTS_SYNC_CHECKPOINT: 'BLING_PRODUCTS_SYNC_CHECKPOINT',
     BLING_LAST_PRODUCTS_SYNC_RUN: 'BLING_LAST_PRODUCTS_SYNC_RUN',
+    BLING_PRODUCT_SUPPLIERS_SYNC_CHECKPOINT: 'BLING_PRODUCT_SUPPLIERS_SYNC_CHECKPOINT',
+    BLING_LAST_PRODUCT_SUPPLIERS_SYNC_RUN: 'BLING_LAST_PRODUCT_SUPPLIERS_SYNC_RUN',
+    BLING_PRIMARY_SUPPLIER_RULE: 'BLING_PRIMARY_SUPPLIER_RULE',
     BLING_STATUS_ATENDIDO_ID: 'BLING_STATUS_ATENDIDO_ID',
     DATA_SPREADSHEET_ID: 'DATA_SPREADSHEET_ID',
     SYNC_TIMEZONE: 'SYNC_TIMEZONE',
@@ -47,7 +50,8 @@ var PRAConfig = (function () {
     BLING_BACKOFF_MAX_MS: 8000,
     BLING_MAX_PAGES: 1000,
     BLING_MAX_PAGES_PER_RUN: 10,
-    BLING_MAX_ORDER_DETAILS_PER_RUN: 20
+    BLING_MAX_ORDER_DETAILS_PER_RUN: 20,
+    BLING_PRIMARY_SUPPLIER_RULE: 'marked_default'
   });
 
   var SENSITIVE_KEYS = Object.freeze([
@@ -74,7 +78,16 @@ var PRAConfig = (function () {
     KEYS.BLING_LAST_INITIAL_ORDERS_RUN,
     KEYS.BLING_ORDER_DETAILS_QUEUE_INDEX,
     KEYS.BLING_PRODUCTS_SYNC_CHECKPOINT,
-    KEYS.BLING_LAST_PRODUCTS_SYNC_RUN
+    KEYS.BLING_LAST_PRODUCTS_SYNC_RUN,
+    KEYS.BLING_PRODUCT_SUPPLIERS_SYNC_CHECKPOINT,
+    KEYS.BLING_LAST_PRODUCT_SUPPLIERS_SYNC_RUN
+  ]);
+
+  var PRIMARY_SUPPLIER_RULES = Object.freeze([
+    'marked_default',
+    'lowest_purchase_price',
+    'lowest_cost_price',
+    'lowest_supplier_id'
   ]);
 
   function properties_() {
@@ -143,6 +156,10 @@ var PRAConfig = (function () {
     var invalid = [];
     var syncHour = Number(getPublicValue(KEYS.SYNC_HOUR, DEFAULTS.SYNC_HOUR));
     var redirectUri = props.getProperty(KEYS.BLING_REDIRECT_URI);
+    var primarySupplierRule = String(getPublicValue(
+      KEYS.BLING_PRIMARY_SUPPLIER_RULE,
+      DEFAULTS.BLING_PRIMARY_SUPPLIER_RULE
+    ));
     var policy = getRequestPolicy();
 
     if (!Number.isInteger(syncHour) || syncHour < 0 || syncHour > 23) {
@@ -150,6 +167,9 @@ var PRAConfig = (function () {
     }
     if (redirectUri && redirectUri.indexOf('https://') !== 0) {
       invalid.push(KEYS.BLING_REDIRECT_URI);
+    }
+    if (PRIMARY_SUPPLIER_RULES.indexOf(primarySupplierRule) < 0) {
+      invalid.push(KEYS.BLING_PRIMARY_SUPPLIER_RULE);
     }
     if (!Number.isInteger(policy.requestsPerSecond) ||
         policy.requestsPerSecond < 1 || policy.requestsPerSecond > 3) {
@@ -202,6 +222,10 @@ var PRAConfig = (function () {
       apiBaseUrl: DEFAULTS.API_BASE_URL,
       syncTimezone: getPublicValue(KEYS.SYNC_TIMEZONE, DEFAULTS.SYNC_TIMEZONE),
       syncHour: Number(getPublicValue(KEYS.SYNC_HOUR, DEFAULTS.SYNC_HOUR)),
+      primarySupplierRule: getPublicValue(
+        KEYS.BLING_PRIMARY_SUPPLIER_RULE,
+        DEFAULTS.BLING_PRIMARY_SUPPLIER_RULE
+      ),
       requestPolicy: getRequestPolicy(),
       configuredProperties: present,
       validation: validate()
