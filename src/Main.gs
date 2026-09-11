@@ -98,6 +98,15 @@ function runOrderDetailsBatch(maxOrders) {
 }
 
 /**
+ * Normaliza pedidos e itens da camada raw para staging.
+ * Retorna somente contagens e metadados operacionais seguros.
+ * @return {Object} Resumo seguro da transformação.
+ */
+function runOrdersNormalization() {
+  return PRATransformService.run();
+}
+
+/**
  * Executa ou retoma a reconciliação completa do catálogo de produtos.
  * Persiste IDs, SKUs e relações pai/filho sem expor o catálogo nos logs.
  * @param {boolean} reset Reinicia o checkpoint da reconciliação quando true.
