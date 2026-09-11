@@ -51,6 +51,23 @@ function runIncrementalOrdersSync(reset) {
 }
 
 /**
+ * Executa ou retoma a reconciliação da janela histórica móvel.
+ * Os pedidos selecionados são reenfileirados para atualização do detalhe.
+ * @param {boolean} force Ignora a frequência mínima quando true.
+ * @param {boolean} reset Reinicia o checkpoint em andamento quando true.
+ * @return {Object} Resumo operacional seguro da execução.
+ */
+function runOrdersReconciliation(force, reset) {
+  return PRAOrdersReconciliationJob.run({
+    force: Boolean(force),
+    reset: Boolean(reset),
+    onPage: function (orders, page, context) {
+      return PRAOrderDetailsQueue.enqueuePage(orders, page, context);
+    }
+  });
+}
+
+/**
  * Executa ou retoma a carga inicial de pedidos atendidos para um período.
  * O armazenamento da página pode ser fornecido pelo próximo estágio por lote;
  * o checkpoint permanece em Script Properties e não contém pedidos.
