@@ -90,3 +90,11 @@ function runProductsSync(reset) {
 function runProductSuppliersSync(reset) {
   return PRAProductSuppliersSyncJob.run({ reset: Boolean(reset) });
 }
+
+/**
+ * Provisiona e valida as abas das camadas raw, staging, mart e logs.
+ * @return {Object} Resumo seguro do esquema provisionado.
+ */
+function provisionDataLayers() {
+  return PRADataLayerProvisioner.run();
+}
