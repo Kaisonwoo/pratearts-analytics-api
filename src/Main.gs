@@ -33,12 +33,21 @@ function testBlingApiConnection() {
 }
 
 /**
- * Ponto de entrada do gatilho diário. A sincronização será implementada
- * nas histórias de coleta; por enquanto retorna um estado explícito.
- * @return {Object} Resultado do disparo.
+ * Executa a sincronização incremental diária de pedidos alterados.
+ * A página só avança depois de ser confirmada na fila de detalhes.
+ * @return {Object} Resumo operacional seguro da execução.
  */
 function runDailySync() {
   return PRADailySyncJob.run();
+}
+
+/**
+ * Executa ou retoma manualmente a sincronização incremental de pedidos.
+ * @param {boolean} reset Reinicia o checkpoint incremental quando true.
+ * @return {Object} Resumo operacional seguro da execução.
+ */
+function runIncrementalOrdersSync(reset) {
+  return PRADailySyncJob.run({ reset: Boolean(reset) });
 }
 
 /**
