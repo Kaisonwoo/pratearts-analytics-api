@@ -9,7 +9,132 @@ function load(file, context) {
 
 function spreadsheetMock() {
   const sheets = new Map();
+
   function range(sheet, row, col, rows, cols) {
     return {
       setValues(values) {
-        values.forEach((v&«VW5&˜r¬"í”‚∞¢6ˆÁ7BF&vWB“&˜r“≤#∞¢ñbÇ6ÜVWBÁf«VW5∑F&vWE“ê¢6ÜVWBÁf«VW5∑F&vWE““µ”∞¢f«VW5&˜rÊf˜$V6ÇÇáf«VR¬2í”‚≤6ÜVWBÁf«VW5∑F&vWE’∂6ˆ¬“≤5““f«VS≤“ì∞¢“ì∞¢&WGW&‚FÜó3∞¢“¿¢vWEf«VW2Çí∞¢&WGW&‚'&íÊg&ˆ“á≤∆VÊwFÉ¢&˜w2“¬ÖÚ¬"í”‡¢'&íÊg&ˆ“á≤∆VÊwFÉ¢6ˆ«2“¬ÖÚ¬2í”‚6ÜVWBÁf«VW5∑&˜r“≤%”ÚÂ∂6ˆ¬“≤5“ÛÚrrê¢ì∞¢“¿¢6∆V$6ˆÁFVÁBÇí∞¢f˜"Ü∆WB"“&˜r“≤"¬&˜r“≤&˜w3≤"≥“í∞¢ñbÇ6ÜVWBÁf«VW5∑%“í6ˆÁFñÁVS∞¢f˜"Ü∆WB2“6ˆ¬“≤2¬6ˆ¬“≤6ˆ«3≤2≥“í6ÜVWBÁf«VW5∑%’∂5““rs∞¢–¢&WGW&‚FÜó3∞¢–¢”∞¢–¢&WGW&‚∞¢6ÜVWG2¿¢vWE6ÜVWD'îÊ÷RÜÊ÷Rí≤&WGW&‚6ÜVWG2ÊvWBÜÊ÷Rí«¬ÁV∆√≤“¿¢ñÁ6W'E6ÜVWBÜÊ÷Rí∞¢6ˆÁ7B6ÜVWB“∞¢Ê÷R¿¢f«VW3¢µ“¿¢g&˜¶VÂ&˜w3¢¿¢vWD∆7E&˜rÇí∞¢∆WB∆7B“∞¢FÜó2Áf«VW2Êf˜$V6ÇÇá&˜r¬ñÊFWÇí”‚≤ñbá&˜rÁ6ˆ÷RÇÜ6V∆¬í”‚6V∆»C”“rrbb6V∆»C”“ÁV∆¬íí∆7B“ñÊFWÇ≤≤“ì∞¢&WGW&‚∆7C∞¢“¿¢vWE&ÊvRá&˜r¬6ˆ¬¬&˜w2¬6ˆ«2í≤&WGW&‚&ÊvRáFÜó2¬&˜r¬6ˆ¬¬&˜w2¬6ˆ«2ì≤“¿¢6WDg&˜¶VÂ&˜w2áf«VRí≤FÜó2Êg&˜¶VÂ&˜w2“f«VS≤–¢”∞¢6ÜVWG2Á6WBÜÊ÷R¬6ÜVWBì∞¢&WGW&‚6ÜVWC∞¢–¢”∞ß–†ßFW7BÇw66ÜV÷6ˆ'&R&r¬7FvñÊr¬÷'BR∆ˆw26ˆ“6ÜfW2Fˆ7V÷VÁFF2r¬Çí”‚∞¢6ˆÁ7B6ˆÁFWáB“≤ˆ&¶V7B”∞¢∆ˆBÇw7&2˜&W˜6óF˜&ñW2ÙFF∆ñW%66ÜV÷Êw2r¬6ˆÁFWáBì∞¢6ˆÁ7BFVfñÊóFñˆÁ2“6ˆÁFWáBÂ$FF∆ñW%66ÜV÷Ê∆ó7BÇì∞¢76W'BÊFVWWV¬Ö≤‚‚ÊÊWr6WBÜFVfñÊóFñˆÁ2Ê÷ÇÜóFV“í”‚óFV“Ê∆ñW"íï“Á6˜'BÇí¬≤v∆ˆw2r¬v÷'Br¬w&rr¬w7FvñÊru“ì∞¢76W'BÊˆ≤ÜFVfñÊóFñˆÁ2ÊWfW'íÇÜóFV“í”‚óFV“Á6ÜVWBbbóFV“Ê∂WíbbóFV“ÊÜVFW'2ÊñÊ6«VFW2ÜóFV“Ê∂Wíííì∞¢76W'BÊWV¬ÜÊWr6WBÜFVfñÊóFñˆÁ2Ê÷ÇÜóFV“í”‚óFV“Á6ÜVWBííÁ6ó¶R¬FVfñÊóFñˆÁ2Ê∆VÊwFÇì∞ß“ì∞†ßFW7BÇw&˜fó6ñˆÊ÷VÁFÚ7&ñ&2¬&Vvó7G&÷WFFF˜2R:íñFV◊˜FVÁFRr¬Çí”‚∞¢6ˆÁ7B7&VG6ÜVWB“7&VG6ÜVWD÷ˆ6≤Çì∞¢6ˆÁ7B∆ˆ6≤“≤vóD∆ˆ6≤Çí∑“¬&V∆V6T∆ˆ6≤Çí∑“”∞¢6ˆÁ7B6ˆÁFWáB“∞¢ˆ&¶V7B¿¢•4Ù‚¿¢÷FÇ¿¢$6ˆÊfñs¢≤¥Uï3¢≤DDı5$TE4ÑTUEÙîC¢tDDı5$TE4ÑTUEÙîBr“¬&WVó&UV&∆ñ5f«VS¢Çí”‚w6ÜVWB”r“¿¢7&VG6ÜVWD¢≤˜V‰'îñC¢Çí”‚7&VG6ÜVWB“¿¢∆ˆ6µ6W'fñ6S¢≤vWE67&óD∆ˆ6≥¢Çí”‚∆ˆ6≤–¢”∞¢∆ˆBÇw7&2˜&W˜6óF˜&ñW2ÙFF∆ñW%66ÜV÷Êw2r¬6ˆÁFWáBì∞¢∆ˆBÇw7&2˜&W˜6óF˜&ñW2ÙFF∆ñW%&˜fó6ñˆÊW"Êw2r¬6ˆÁFWáBì∞†¢6ˆÁ7Bfó'7B“6ˆÁFWáBÂ$FF∆ñW%&˜fó6ñˆÊW"Á'V‚Çì∞¢6ˆÁ7B6V6ˆÊB“6ˆÁFWáBÂ$FF∆ñW%&˜fó6ñˆÊW"Á'V‚Çì∞¢76W'BÊWV¬Üfó'7BÊˆ≤¬G'VRì∞¢76W'BÊWV¬Üfó'7BÁ6ÜVWG47&VFVB¬fó'7BÁ6ÜVWG5fW&ñfñVBì∞¢76W'BÊWV¬á6V6ˆÊBÁ6ÜVWG47&VFVB¬ì∞¢76W'BÊWV¬á7&VG6ÜVWBÁ6ÜVWG2ÊvWBÇu˜66ÜV÷˜&Vvó7G'íríÊvWD∆7E&˜rÇí¬fó'7BÊ÷WFFF&˜w2≤ì∞ß“ì∞†ßFW7BÇw&˜fó6ñˆÊ÷VÁFÚ&V¶VóF6&\:v∆ÜÚñÊ6ˆ◊L:◊fV¬6V“6ˆ'&W67&WfW"FF˜2r¬Çí”‚∞¢6ˆÁ7B7&VG6ÜVWB“7&VG6ÜVWD÷ˆ6≤Çì∞¢6ˆÁ7B&t˜&FW'2“7&VG6ÜVWBÊñÁ6W'E6ÜVWBÇw&uˆ˜&FW'2rì∞¢&t˜&FW'2ÊvWE&ÊvRÉ¬¬¬"íÁ6WEf«VW2Öµ≤ww&ˆÊrr¬vÜVFW"u’“ì∞¢6ˆÁ7B6ˆÁFWáB“∞¢ˆ&¶V7B¿¢•4Ù‚¿¢÷FÇ¿¢$6ˆÊfñs¢≤¥Uï3¢≤DDı5$TE4ÑTUEÙîC¢tDDı5$TE4ÑTUEÙîBr“¬&WVó&UV&∆ñ5f«VS¢Çí”‚w6ÜVWB”r“¿¢7&VG6ÜVWD¢≤˜V‰'îñC¢Çí”‚7&VG6ÜVWB“¿¢∆ˆ6µ6W'fñ6S¢≤vWE67&óD∆ˆ6≥¢Çí”‚á≤vóD∆ˆ6≤Çí∑“¬&V∆V6T∆ˆ6≤Çí∑““í–¢”∞¢∆ˆBÇw7&2˜&W˜6óF˜&ñW2ÙFF∆ñW%66ÜV÷Êw2r¬6ˆÁFWáBì∞¢∆ˆBÇw7&2˜&W˜6óF˜&ñW2ÙFF∆ñW%&˜fó6ñˆÊW"Êw2r¬6ˆÁFWáBì∞¢76W'BÁFá&˜w2ÇÇí”‚6ˆÁFWáBÂ$FF∆ñW%&˜fó6ñˆÊW"Á'V‚Çí¬Ù6&\:v∆ÜÚñÊ6ˆ◊L:ófV¬Úì∞¢76W'BÊWV¬á&t˜&FW'2Áf«VW5≥’≥“¬ww&ˆÊrrì∞ß“ì∞†
+        values.forEach((valuesRow, r) => {
+          const target = row - 1 + r;
+          if (!sheet.values[target]) sheet.values[target] = [];
+          valuesRow.forEach((value, c) => {
+            sheet.values[target][col - 1 + c] = value;
+          });
+        });
+        return this;
+      },
+      getValues() {
+        return Array.from({ length: rows }, (_, r) =>
+          Array.from({ length: cols }, (_, c) =>
+            sheet.values[row - 1 + r]?.[col - 1 + c] ?? ''
+          )
+        );
+      },
+      clearContent() {
+        for (let r = row - 1; r < row - 1 + rows; r += 1) {
+          if (!sheet.values[r]) continue;
+          for (let c = col - 1; c < col - 1 + cols; c += 1) {
+            sheet.values[r][c] = '';
+          }
+        }
+        return this;
+      }
+    };
+  }
+
+  return {
+    sheets,
+    getSheetByName(name) {
+      return sheets.get(name) || null;
+    },
+    insertSheet(name) {
+      const sheet = {
+        name,
+        values: [],
+        frozenRows: 0,
+        getLastRow() {
+          let last = 0;
+          this.values.forEach((valuesRow, index) => {
+            if (valuesRow.some((cell) => cell !== '' && cell !== null)) last = index + 1;
+          });
+          return last;
+        },
+        getRange(row, col, rows, cols) {
+          return range(this, row, col, rows, cols);
+        },
+        setFrozenRows(value) {
+          this.frozenRows = value;
+        }
+      };
+      sheets.set(name, sheet);
+      return sheet;
+    }
+  };
+}
+
+test('schema cobre raw, staging, mart e logs com chaves documentadas', () => {
+  const context = { Object };
+  load('src/repositories/DataLayerSchema.gs', context);
+  const definitions = context.PRADataLayerSchema.list();
+  assert.deepEqual(
+    Array.from(new Set(Array.from(definitions, (item) => item.layer))).sort(),
+    ['logs', 'mart', 'raw', 'staging']
+  );
+  assert.ok(Array.from(definitions).every((item) =>
+    item.sheet && item.key && Array.from(item.headers).includes(item.key)
+  ));
+  assert.equal(new Set(Array.from(definitions, (item) => item.sheet)).size, definitions.length);
+});
+
+test('provisionamento cria abas, registra metadados e √© idempotente', () => {
+  const spreadsheet = spreadsheetMock();
+  const lock = { waitLock() {}, releaseLock() {} };
+  const context = {
+    Object,
+    JSON,
+    Math,
+    PRAConfig: {
+      KEYS: { DATA_SPREADSHEET_ID: 'DATA_SPREADSHEET_ID' },
+      requirePublicValue: () => 'sheet-1'
+    },
+    SpreadsheetApp: { openById: () => spreadsheet },
+    LockService: { getScriptLock: () => lock }
+  };
+  load('src/repositories/DataLayerSchema.gs', context);
+  load('src/repositories/DataLayerProvisioner.gs', context);
+
+  const first = context.PRADataLayerProvisioner.run();
+  const second = context.PRADataLayerProvisioner.run();
+  assert.equal(first.ok, true);
+  assert.equal(first.sheetsCreated, first.sheetsVerified);
+  assert.equal(second.sheetsCreated, 0);
+  assert.equal(
+    spreadsheet.sheets.get('_schema_registry').getLastRow(),
+    first.metadataRows + 1
+  );
+});
+
+test('provisionamento rejeita cabe√ßalho incompat√≠vel sem sobrescrever dados', () => {
+  const spreadsheet = spreadsheetMock();
+  const rawOrders = spreadsheet.insertSheet('raw_orders');
+  rawOrders.getRange(1, 1, 1, 2).setValues([['wrong', 'header']]);
+  const context = {
+    Object,
+    JSON,
+    Math,
+    PRAConfig: {
+      KEYS: { DATA_SPREADSHEET_ID: 'DATA_SPREADSHEET_ID' },
+      requirePublicValue: () => 'sheet-1'
+    },
+    SpreadsheetApp: { openById: () => spreadsheet },
+    LockService: {
+      getScriptLock: () => ({ waitLock() {}, releaseLock() {} })
+    }
+  };
+  load('src/repositories/DataLayerSchema.gs', context);
+  load('src/repositories/DataLayerProvisioner.gs', context);
+  assert.throws(
+    () => context.PRADataLayerProvisioner.run(),
+    /Cabe√ßalho incompat√≠vel/
+  );
+  assert.equal(rawOrders.values[0][0], 'wrong');
+});

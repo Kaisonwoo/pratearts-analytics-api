@@ -31,13 +31,23 @@ var PRADataLayerProvisioner = (function () {
         throw new Error('Cabeçalho incompatível na aba ' + name + '.');
       }
       var existing = Math.max(sheet.getLastRow() - 1, 0);
-      if (existing > 0) sheet.getRange(2, 1, existing, headers.length).clearContent();
+      if (existing > 0) {
+        sheet.getRange(2, 1, existing, headers.length).clearContent();
+      }
     }
 
     var rows = definitions.map(function (definition) {
-      return [definition.sheet, definition.layer, definition.key, definition.headers.length, PRADataLayerSchema.VERSION];
+      return [
+        definition.sheet,
+        definition.layer,
+        definition.key,
+        definition.headers.length,
+        PRADataLayerSchema.VERSION
+      ];
     });
-    if (rows.length > 0) sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+    if (rows.length > 0) {
+      sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+    }
     return rows.length;
   }
 
