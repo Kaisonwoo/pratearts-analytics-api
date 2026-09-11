@@ -24,6 +24,7 @@ const requiredFiles = [
   'docs/incremental-sync.md',
   'docs/reconciliation.md',
   'docs/normalization.md',
+  'docs/valid-sales.md',
   'docs/samples/bling/product-detail-with-variations.json',
   'docs/samples/bling/product-list.json',
   'docs/samples/bling/product-supplier-list.json',
@@ -55,7 +56,8 @@ const requiredFiles = [
   'src/repositories/RecalculationWindowStore.gs',
   'src/services/HealthService.gs',
   'src/services/OAuthService.gs',
-  'src/services/TransformService.gs'
+  'src/services/TransformService.gs',
+  'src/services/ValidSalesService.gs'
 ];
 
 for (const relative of requiredFiles) {
