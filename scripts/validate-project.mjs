@@ -20,6 +20,10 @@ const requiredFiles = [
   'docs/oauth-authorization.md',
   'docs/pagination-resilience.md',
   'docs/token-renewal.md',
+  'docs/data-layers.md',
+  'docs/incremental-sync.md',
+  'docs/reconciliation.md',
+  'docs/normalization.md',
   'docs/samples/bling/product-detail-with-variations.json',
   'docs/samples/bling/product-list.json',
   'docs/samples/bling/product-supplier-list.json',
@@ -35,16 +39,23 @@ const requiredFiles = [
   'src/clients/BlingClient.gs',
   'src/core/Resilience.gs',
   'src/core/Logger.gs',
+  'src/jobs/DailySyncJob.gs',
   'src/jobs/OrderDetailsJob.gs',
   'src/jobs/OrderDetailsQueue.gs',
   'src/jobs/OrdersInitialLoadJob.gs',
+  'src/jobs/OrdersIncrementalSyncJob.gs',
+  'src/jobs/OrdersReconciliationJob.gs',
   'src/jobs/ProductsSyncJob.gs',
   'src/jobs/ProductSuppliersSyncJob.gs',
+  'src/repositories/DataLayerSchema.gs',
+  'src/repositories/DataLayerProvisioner.gs',
   'src/repositories/OrderDetailsStore.gs',
   'src/repositories/ProductStore.gs',
   'src/repositories/ProductSupplierStore.gs',
+  'src/repositories/RecalculationWindowStore.gs',
   'src/services/HealthService.gs',
-  'src/services/OAuthService.gs'
+  'src/services/OAuthService.gs',
+  'src/services/TransformService.gs'
 ];
 
 for (const relative of requiredFiles) {
