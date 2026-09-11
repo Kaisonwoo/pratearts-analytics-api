@@ -1,12 +1,25 @@
 var PRADailySyncJob = (function () {
   'use strict';
 
-  function run() {
-    var result = {
-      status: 'not_implemented',
-      message: 'A sincronização será implementada nos Sprints 1 e 2.'
+  function run(options) {
+    options = options || {};
+    var incrementalOptions = {
+      reset: Boolean(options.reset),
+      today: options.today,
+      lookbackDays: options.lookbackDays,
+      pageSize: options.pageSize,
+      maxPagesPerRun: options.maxPagesPerRun,
+      onPage: typeof options.onPage === 'function' ? options.onPage : function (orders, page, context) {
+        return PRAOrderDetailsQueue.enqueuePage(orders, page, context);
+      }
     };
-    PRALogger.info('daily_sync_skipped', result);
+
+    var result = PRAOrdersIncrementalSync.run(incrementalOptions);
+    PRALogger.info('daily_sync_incremental_result', {
+      ok: Boolean(result && result.ok),
+      status: result && result.status,
+      code: result && result.code
+    });
     return result;
   }
 
