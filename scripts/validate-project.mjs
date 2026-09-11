@@ -14,6 +14,7 @@ const requiredFiles = [
   'docs/bling-api-mapping.md',
   'docs/connectivity-health.md',
   'docs/http-client.md',
+  'docs/order-details.md',
   'docs/oauth-authorization.md',
   'docs/pagination-resilience.md',
   'docs/token-renewal.md',
@@ -32,6 +33,10 @@ const requiredFiles = [
   'src/clients/BlingClient.gs',
   'src/core/Resilience.gs',
   'src/core/Logger.gs',
+  'src/jobs/OrderDetailsJob.gs',
+  'src/jobs/OrderDetailsQueue.gs',
+  'src/jobs/OrdersInitialLoadJob.gs',
+  'src/repositories/OrderDetailsStore.gs',
   'src/services/HealthService.gs',
   'src/services/OAuthService.gs'
 ];

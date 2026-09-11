@@ -27,11 +27,14 @@
 | `BLING_BACKOFF_BASE_MS` | Não | Não | Espera inicial do backoff; padrão: `1000` ms. |
 | `BLING_BACKOFF_MAX_MS` | Não | Não | Teto da espera progressiva; padrão: `8000` ms. |
 | `BLING_MAX_PAGES` | Não | Não | Limite de segurança por listagem; padrão: `1000`. |
+| `BLING_MAX_PAGES_PER_RUN` | Não | Não | Limita páginas da carga inicial por execução; padrão: `10`. |
 | `BLING_NEXT_REQUEST_AT` | Gerenciada | Não | Reserva interna do próximo intervalo permitido entre chamadas. |
 | `BLING_LAST_SUCCESS_AT` | Gerenciada | Não | Horário ISO da última chamada mínima concluída com sucesso. |
 | `BLING_LAST_SUCCESS_CORRELATION_ID` | Gerenciada | Não | Identificador seguro da última chamada mínima bem-sucedida. |
 | `BLING_STATUS_ATENDIDO_ID` | Antes da coleta | Não | ID técnico da situação válida de venda. |
 | `DATA_SPREADSHEET_ID` | Antes da persistência | Não | Identifica a base de dados do MVP. |
+| `BLING_MAX_ORDER_DETAILS_PER_RUN` | Antes da coleta de detalhes | Não | Limita pedidos detalhados por execução; padrão 20, máximo 100. |
+| `BLING_ORDER_DETAILS_QUEUE_INDEX` | Gerenciada | Não | Índice interno da fila fragmentada; contém somente contagens e chaves técnicas. |
 | `SYNC_TIMEZONE` | Não | Não | Padrão: `America/Sao_Paulo`. |
 | `SYNC_HOUR` | Não | Não | Inteiro entre 0 e 23; padrão: `6`. |
 
@@ -76,3 +79,4 @@ O contrato e a validação manual estão em [`connectivity-health.md`](connectiv
 O passo a passo completo de implantação e primeira autorização está em [`oauth-authorization.md`](oauth-authorization.md).
 O fluxo de renovação automática e seu teste manual seguro estão em [`token-renewal.md`](token-renewal.md).
 O paginador, o limitador de chamadas e as retentativas estão em [`pagination-resilience.md`](pagination-resilience.md).
+A carga inicial e a fila de detalhes estão em [`orders-initial-load.md`](orders-initial-load.md) e [`order-details.md`](order-details.md).

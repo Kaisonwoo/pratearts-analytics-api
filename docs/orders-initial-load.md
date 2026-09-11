@@ -12,7 +12,7 @@ Script Properties; ela devolve apenas contagens e metadados da execução.
 ## Retomada segura
 
 - Cada página é confirmada somente depois de ser recebida e aceita pelo
-  callback de armazenamento, quando fornecido.
+  callback que enfileira os IDs para a coleta de detalhes.
 - O checkpoint contém período, situação, página seguinte, contagem de páginas,
   contagem de registros e `runId`.
 - Falha HTTP ou de persistência preserva a página atual para a próxima execução.
@@ -34,6 +34,10 @@ No Apps Script, execute `runInitialOrdersLoad` informando `startDate` e
 `in_progress` informa `nextPage`; `completed` informa o intervalo e as
 contagens finais. `page_fetch_failed` e `page_persistence_failed` não avançam
 o checkpoint.
+
+Depois da implantação da US-011, a mesma execução também alimenta a fila de
+detalhes. Uma carga realizada em versão anterior precisa ser repetida para que
+seus IDs sejam enfileirados; a consulta anterior não armazenou payloads.
 
 ## Segurança
 

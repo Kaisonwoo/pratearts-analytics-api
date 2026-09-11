@@ -54,6 +54,19 @@ function runInitialOrdersLoad(startDate, endDate, reset) {
   return PRAOrdersInitialLoad.run({
     startDate: startDate,
     endDate: endDate,
-    reset: Boolean(reset)
+    reset: Boolean(reset),
+    onPage: function (orders, page, context) {
+      return PRAOrderDetailsQueue.enqueuePage(orders, page, context);
+    }
   });
+}
+
+/**
+ * Processa um lote retomável de detalhes dos pedidos enfileirados pela carga.
+ * O retorno contém somente contagens e metadados operacionais seguros.
+ * @param {number} maxOrders Quantidade máxima opcional de pedidos no lote.
+ * @return {Object} Resumo seguro da execução.
+ */
+function runOrderDetailsBatch(maxOrders) {
+  return PRAOrderDetailsJob.run({ maxOrders: maxOrders });
 }
