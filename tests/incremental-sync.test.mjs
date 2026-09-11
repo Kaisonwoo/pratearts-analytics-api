@@ -138,7 +138,7 @@ test('falha de persistência não avança a página', async () => {
 
 test('retomada mantém a janela original mesmo em outro dia', async () => {
   const f = fixture({ pages: { 2: { data: [{ id: 6 }] } } });
-  f.values.set('BLING_INCREMENTAL_ORDERS_CHECKPOINT', json.stringify({
+  f.values.set('BLING_INCREMENTAL_ORDERS_CHECKPOINT', JSON.stringify({
     runId: 'existing-run',
     baselineSource: 'incremental',
     baselineDate: '2026-09-09',
