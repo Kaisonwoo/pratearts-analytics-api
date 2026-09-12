@@ -80,6 +80,12 @@ function fixture(options = {}) {
 }
 
 async function load(context, file = 'OrdersIncrementalSyncJob.gs') {
+  if (file === 'OrdersIncrementalSyncJob.gs') {
+    const leaseCode = await readFile(path.join(root, 'src/core/ExecutionLease.gs'), 'utf8');
+    vm.runInContext(leaseCode, context, { filename: 'src/core/ExecutionLease.gs' });
+    const budgetCode = await readFile(path.join(root, 'src/core/RuntimeBudget.gs'), 'utf8');
+    vm.runInContext(budgetCode, context, { filename: 'src/core/RuntimeBudget.gs' });
+  }
   const code = await readFile(path.join(root, 'src/jobs', file), 'utf8');
   vm.runInContext(code, context, { filename: `src/jobs/${file}` });
 }
@@ -176,9 +182,30 @@ test('sem carga inicial concluída não consulta a API', async () => {
   assert.equal(f.calls.length, 0);
 });
 
-test('DailySync delega ao incremental e enfileira detalhes', async () => {
+test('incremental salva checkpoint ao atingir orçamento de tempo', async () => {
+  const f = fixture({ pages: { 1: { data: [{ id: 8 }] } } });
+  let clock = 0;
+  f.context.Date = class extends Date {
+    static now() { clock += 1000; return clock; }
+  };
+  await load(f.context);
+
+  const result = vm.runInContext(
+    "PRAOrdersIncrementalSync.run({ today: '2026-09-11', maxRuntimeMs: 1000, reserveMs: 0, onPage: persist })",
+    f.context
+  );
+  assert.equal(result.status, 'in_progress');
+  assert.equal(result.code, 'execution_budget_reached');
+  assert.equal(result.nextPage, 1);
+  assert.equal(f.calls.length, 0);
+});
+
+test('DailySync orquestra incremental, detalhes e normalizacao', async () => {
   const queued = [];
   const context = vm.createContext({
+    PRAConfig: {
+      getRequestPolicy: () => ({ executionBudgetMs: 270000 })
+    },
     PRAOrdersIncrementalSync: {
       run: (options) => {
         options.onPage([{ id: 7 }], 2, { runId: 'daily-run' });
@@ -186,16 +213,85 @@ test('DailySync delega ao incremental e enfileira detalhes', async () => {
       }
     },
     PRAOrderDetailsQueue: {
-      enqueuePage: (orders, page, metadata) => queued.push({ orders, page, metadata })
+      enqueuePage: (orders, page, metadata) => queued.push({ orders, page, metadata }),
+      getSummary: () => ({ pending: 0 })
+    },
+    PRAOrdersReconciliationJob: {
+      run: () => ({ ok: true, status: 'skipped', code: 'reconciliation_not_due' })
+    },
+    PRAOrderDetailsJob: {
+      run: () => ({ ok: true, status: 'completed', unresolvedErrors: 0, pending: 0 })
+    },
+    PRATransformService: {
+      run: () => ({ ok: true, status: 'completed', code: 'orders_normalization_completed' })
     },
     PRALogger: { info: () => {} },
-    Boolean
+    Date,
+    Number,
+    Boolean,
+    Object,
+    Math
   });
+  vm.runInContext(
+    await readFile(path.join(root, 'src/core/RuntimeBudget.gs'), 'utf8'),
+    context,
+    { filename: 'src/core/RuntimeBudget.gs' }
+  );
   await load(context, 'DailySyncJob.gs');
 
-  const result = vm.runInContext("PRADailySyncJob.run({ today: '2026-09-11' })", context);
+  const result = vm.runInContext(
+    "PRADailySyncJob.run({ today: '2026-09-11', scheduleContinuation: false })",
+    context
+  );
   assert.equal(result.status, 'completed');
   assert.equal(queued.length, 1);
   assert.equal(queued[0].page, 2);
   assert.equal(queued[0].metadata.runId, 'daily-run');
+});
+
+test('DailySync bloqueia normalização quando existem erros de detalhe não resolvidos', async () => {
+  let normalizationCalls = 0;
+  const context = vm.createContext({
+    PRAConfig: { getRequestPolicy: () => ({ executionBudgetMs: 270000 }) },
+    PRAOrdersIncrementalSync: {
+      run: () => ({ ok: true, status: 'completed', code: 'incremental_sync_completed' })
+    },
+    PRAOrdersReconciliationJob: {
+      run: () => ({ ok: true, status: 'skipped', code: 'reconciliation_not_due' })
+    },
+    PRAOrderDetailsQueue: {
+      enqueuePage() {},
+      getSummary: () => ({ pending: 0 })
+    },
+    PRAOrderDetailsJob: {
+      run: () => ({
+        ok: true,
+        status: 'completed_with_errors',
+        unresolvedErrors: 1,
+        pending: 0
+      })
+    },
+    PRATransformService: {
+      run: () => {
+        normalizationCalls += 1;
+        return { ok: true, status: 'completed' };
+      }
+    },
+    PRALogger: { info() {}, error() {} },
+    Date, Number, Boolean, Object, Math
+  });
+  vm.runInContext(
+    await readFile(path.join(root, 'src/core/RuntimeBudget.gs'), 'utf8'),
+    context,
+    { filename: 'src/core/RuntimeBudget.gs' }
+  );
+  await load(context, 'DailySyncJob.gs');
+
+  const result = vm.runInContext(
+    "PRADailySyncJob.run({ scheduleContinuation: false })",
+    context
+  );
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'daily_sync_unresolved_errors');
+  assert.equal(normalizationCalls, 0);
 });

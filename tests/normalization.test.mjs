@@ -13,6 +13,10 @@ function spreadsheetMock() {
   function createRange(sheet, row, col, rows, cols) {
     return {
       setValues(input) {
+        if (sheet.failNextSetValues > 0) {
+          sheet.failNextSetValues -= 1;
+          throw new Error('synthetic setValues failure');
+        }
         input.forEach((sourceRow, r) => {
           const targetRow = row - 1 + r;
           if (!sheet.values[targetRow]) sheet.values[targetRow] = [];
@@ -47,6 +51,7 @@ function spreadsheetMock() {
     insertSheet(name) {
       const sheet = {
         values: [],
+        failNextSetValues: 0,
         frozenRows: 0,
         getLastRow() {
           let last = 0;
@@ -88,7 +93,12 @@ async function createFixture() {
     isNaN
   });
 
-  for (const file of ['src/repositories/DataLayerSchema.gs', 'src/services/TransformService.gs']) {
+  for (const file of [
+    'src/repositories/DataLayerSchema.gs',
+    'src/core/RuntimeBudget.gs',
+    'src/core/SheetWriter.gs',
+    'src/services/TransformService.gs'
+  ]) {
     const code = await readFile(path.join(root, file), 'utf8');
     vm.runInContext(code, context, { filename: file });
   }
@@ -299,4 +309,29 @@ test('preserva erros externos e não expõe valores comerciais no resumo ou log'
   const publicOutput = JSON.stringify([result, f.logs]);
   assert.doesNotMatch(publicOutput, /ORDER-SECRET|SKU-SECRET|9876\.54/);
   assert.match(publicOutput, /orders_normalization_completed/);
+});
+
+test('falha entre abas restaura integralmente o ultimo staging valido', async () => {
+  const f = await createFixture();
+  f.seed('raw_orders', [validOrder({ order_id: '202', order_number: 9002 })]);
+  f.seed('raw_order_items', [validItem({ item_key: '202:1', order_id: '202' })]);
+
+  const oldOrder = Array(12).fill('old-order');
+  const oldItem = Array(11).fill('old-item');
+  const oldQuality = [
+    'external:old', 'order', '101', 'old_issue', 'warning',
+    '2026-09-01T00:00:00.000Z', '', 'old-run'
+  ];
+  const stgOrders = f.seed('stg_orders', [oldOrder]);
+  const stgItems = f.seed('stg_order_items', [oldItem]);
+  const quality = f.seed('data_quality_errors', [oldQuality]);
+  stgItems.failNextSetValues = 1;
+
+  assert.throws(
+    () => f.context.PRATransformService.run(),
+    /base anterior foi restaurada/
+  );
+  assert.deepEqual(normalized(stgOrders.values[1]), oldOrder);
+  assert.deepEqual(normalized(stgItems.values[1]), oldItem);
+  assert.deepEqual(normalized(quality.values[1]), oldQuality);
 });

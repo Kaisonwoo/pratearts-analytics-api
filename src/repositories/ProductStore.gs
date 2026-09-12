@@ -64,13 +64,7 @@ var PRAProductStore = (function () {
   }
 
   function replaceRows_(sheet, rows) {
-    var existingRows = Math.max(sheet.getLastRow() - 1, 0);
-    if (existingRows > 0) {
-      sheet.getRange(2, 1, existingRows, HEADERS.length).clearContent();
-    }
-    if (rows.length > 0) {
-      sheet.getRange(2, 1, rows.length, HEADERS.length).setValues(rows);
-    }
+    PRASheetWriter.replaceRows(sheet, HEADERS.length, rows);
   }
 
   function mergeByProductId_(existing, incoming) {

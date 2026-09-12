@@ -16,6 +16,10 @@ E reconstrói de forma determinística:
 
 Cada execução recebe um `run_id` próprio e grava `processed_at`. As linhas de staging são ordenadas pelas chaves estáveis para facilitar auditoria e comparação entre execuções.
 
+As três abas de destino são tratadas como um único lote lógico. Os novos dados
+são gravados antes da remoção de linhas antigas; se qualquer aba falhar, as abas
+já alteradas são restauradas a partir do snapshot anterior.
+
 ## Normalização
 
 A transformação aplica as seguintes convenções:
@@ -60,5 +64,9 @@ Dessa forma, a normalização não incorpora regras comerciais antes de elas ser
 ## Execução
 
 Após a coleta dos detalhes, execute `runOrdersNormalization()` para reconstruir o staging a partir do estado raw mais recente.
+
+Antes de iniciar a gravação, a rotina verifica o orçamento compartilhado de
+execução. Se a margem segura tiver sido atingida, retorna
+`orders_normalization_budget_reached` sem alterar o staging confirmado.
 
 O retorno contém somente contagens e metadados operacionais seguros; nenhum SKU, valor comercial ou payload é enviado aos logs.

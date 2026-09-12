@@ -31,6 +31,7 @@ Separar dados de origem, dados tratados, indicadores e controles operacionais pa
 | logs | `sync_runs` | `run_id` |
 | logs | `data_quality_errors` | `error_key` |
 | logs | `order_detail_errors` | `order_id` |
+| logs | `recalc_windows` | `recalc_key` |
 
 ## Provisionamento
 

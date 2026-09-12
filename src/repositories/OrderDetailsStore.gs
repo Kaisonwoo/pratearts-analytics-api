@@ -62,16 +62,6 @@ var PRAOrderDetailsStore = (function () {
       });
   }
 
-  function replaceRows_(sheet, headers, rows) {
-    var existingRows = Math.max(sheet.getLastRow() - 1, 0);
-    if (existingRows > 0) {
-      sheet.getRange(2, 1, existingRows, headers.length).clearContent();
-    }
-    if (rows.length > 0) {
-      sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
-    }
-  }
-
   function mergeByKey_(existing, incoming, keyIndex) {
     var positions = {};
     var merged = existing.map(function (row, position) {
@@ -170,11 +160,7 @@ var PRAOrderDetailsStore = (function () {
       var incomingOrders = details.map(function (detail) {
         return orderRow_(detail, metadata, timestamp);
       });
-      replaceRows_(
-        ordersSheet,
-        ORDER_HEADERS,
-        mergeByKey_(existingOrders, incomingOrders, 0)
-      );
+      var mergedOrders = mergeByKey_(existingOrders, incomingOrders, 0);
 
       var affectedOrderIds = {};
       details.forEach(function (detail) { affectedOrderIds[id_(detail.id)] = true; });
@@ -184,7 +170,7 @@ var PRAOrderDetailsStore = (function () {
       var incomingItems = details.reduce(function (rows, detail) {
         return rows.concat(itemRows_(detail, metadata, timestamp));
       }, []);
-      replaceRows_(itemsSheet, ITEM_HEADERS, existingItems.concat(incomingItems));
+      var mergedItems = existingItems.concat(incomingItems);
 
       var existingErrors = readRows_(errorsSheet, ERROR_HEADERS);
       var errorByOrder = {};
@@ -197,15 +183,24 @@ var PRAOrderDetailsStore = (function () {
         var orderId = id_(failure.orderId);
         errorByOrder[orderId] = errorRow_(failure, metadata, timestamp, '');
       });
-      replaceRows_(errorsSheet, ERROR_HEADERS, Object.keys(errorByOrder).map(function (key) {
+      var mergedErrors = Object.keys(errorByOrder).map(function (key) {
         return errorByOrder[key];
-      }));
+      });
+
+      PRASheetWriter.replaceMany([
+        { sheet: ordersSheet, width: ORDER_HEADERS.length, rows: mergedOrders },
+        { sheet: itemsSheet, width: ITEM_HEADERS.length, rows: mergedItems },
+        { sheet: errorsSheet, width: ERROR_HEADERS.length, rows: mergedErrors }
+      ]);
+
+      var unresolvedErrors = mergedErrors.filter(function (row) { return !row[7]; }).length;
 
       return {
         ok: true,
         ordersStored: incomingOrders.length,
         itemsStored: incomingItems.length,
         errorsStored: failures.length,
+        unresolvedErrors: unresolvedErrors,
         updatedAt: timestamp
       };
     } finally {
@@ -213,7 +208,21 @@ var PRAOrderDetailsStore = (function () {
     }
   }
 
+  function getUnresolvedErrorCount() {
+    var spreadsheetId = PRAConfig.requirePublicValue(PRAConfig.KEYS.DATA_SPREADSHEET_ID);
+    var lock = LockService.getScriptLock();
+    lock.waitLock(LOCK_TIMEOUT_MS);
+    try {
+      var spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+      var sheet = ensureSheet_(spreadsheet, SHEETS.ERRORS, ERROR_HEADERS);
+      return readRows_(sheet, ERROR_HEADERS).filter(function (row) { return !row[7]; }).length;
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
   return Object.freeze({
-    persistBatch: persistBatch
+    persistBatch: persistBatch,
+    getUnresolvedErrorCount: getUnresolvedErrorCount
   });
 })();

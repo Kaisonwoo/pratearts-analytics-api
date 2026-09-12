@@ -84,6 +84,9 @@ var PRAOrdersIncrementalSync = (function () {
     var requestPolicy = PRAConfig.getRequestPolicy();
     var pageSize = Number(settings.pageSize || requestPolicy.pageSize);
     var maxPagesPerRun = Number(settings.maxPagesPerRun || requestPolicy.maxPagesPerRun);
+    var executionBudgetMs = Number(
+      settings.maxRuntimeMs || requestPolicy.executionBudgetMs || 270000
+    );
     var lookbackDays = lookbackDays_(settings);
 
     if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
@@ -103,12 +106,20 @@ var PRAOrdersIncrementalSync = (function () {
         {}
       );
     }
+    if (!Number.isInteger(executionBudgetMs) || executionBudgetMs < 1000 || executionBudgetMs > 330000) {
+      return failure_(
+        'execution_budget_invalid',
+        'O orcamento de execucao deve estar entre 1000 e 330000 ms.',
+        {}
+      );
+    }
 
     return {
       ok: true,
       pageSize: pageSize,
       maxPages: requestPolicy.maxPages,
       maxPagesPerRun: maxPagesPerRun,
+      executionBudgetMs: executionBudgetMs,
       lookbackDays: lookbackDays,
       today: today_(settings)
     };
@@ -219,13 +230,18 @@ var PRAOrdersIncrementalSync = (function () {
     };
   }
 
-  function run(options) {
+  function runUnlocked_(options) {
     options = options || {};
     var settings = validateSettings_(options);
     if (!settings.ok) {
       PRALogger.warn('incremental_orders_sync_blocked', { code: settings.code });
       return settings;
     }
+    var budget = PRARuntimeBudget.create({
+      budgetMs: settings.executionBudgetMs,
+      deadlineAtMs: options.deadlineAtMs,
+      reserveMs: typeof options.reserveMs === 'undefined' ? 15000 : options.reserveMs
+    });
 
     if (options.reset) clearCheckpoint_();
 
@@ -256,6 +272,15 @@ var PRAOrdersIncrementalSync = (function () {
 
     var pagesThisRun = 0;
     while (pagesThisRun < settings.maxPagesPerRun) {
+      if (budget.shouldYield()) {
+        saveCheckpoint_(current);
+        var budgetResult = publicSummary_('in_progress', 'execution_budget_reached', current);
+        PRALogger.info('incremental_orders_execution_budget_reached', {
+          runId: current.runId,
+          nextPage: current.nextPage
+        });
+        return budgetResult;
+      }
       if (current.pagesFetched >= settings.maxPages) {
         PRALogger.error('incremental_orders_page_limit', {
           runId: current.runId,
@@ -370,6 +395,22 @@ var PRAOrdersIncrementalSync = (function () {
       nextPage: current.nextPage
     });
     return inProgress;
+  }
+
+  function run(options) {
+    var lease = PRAExecutionLease.acquire('orders_incremental_sync');
+    if (!lease.acquired) {
+      return failure_(
+        'execution_in_progress',
+        'Ja existe uma sincronizacao incremental em andamento.',
+        { retryAfter: new Date(lease.expiresAt).toISOString() }
+      );
+    }
+    try {
+      return runUnlocked_(options);
+    } finally {
+      PRAExecutionLease.release(lease);
+    }
   }
 
   return Object.freeze({

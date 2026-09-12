@@ -18,6 +18,7 @@ var PRAConfig = (function () {
     BLING_MAX_PAGES: 'BLING_MAX_PAGES',
     BLING_MAX_PAGES_PER_RUN: 'BLING_MAX_PAGES_PER_RUN',
     BLING_MAX_ORDER_DETAILS_PER_RUN: 'BLING_MAX_ORDER_DETAILS_PER_RUN',
+    BLING_EXECUTION_BUDGET_MS: 'BLING_EXECUTION_BUDGET_MS',
     BLING_NEXT_REQUEST_AT: 'BLING_NEXT_REQUEST_AT',
     BLING_LAST_SUCCESS_AT: 'BLING_LAST_SUCCESS_AT',
     BLING_LAST_SUCCESS_CORRELATION_ID: 'BLING_LAST_SUCCESS_CORRELATION_ID',
@@ -51,6 +52,7 @@ var PRAConfig = (function () {
     BLING_MAX_PAGES: 1000,
     BLING_MAX_PAGES_PER_RUN: 10,
     BLING_MAX_ORDER_DETAILS_PER_RUN: 20,
+    BLING_EXECUTION_BUDGET_MS: 270000,
     BLING_PRIMARY_SUPPLIER_RULE: 'marked_default'
   });
 
@@ -144,6 +146,10 @@ var PRAConfig = (function () {
       maxOrderDetailsPerRun: readInteger_(
         KEYS.BLING_MAX_ORDER_DETAILS_PER_RUN,
         DEFAULTS.BLING_MAX_ORDER_DETAILS_PER_RUN
+      ),
+      executionBudgetMs: readInteger_(
+        KEYS.BLING_EXECUTION_BUDGET_MS,
+        DEFAULTS.BLING_EXECUTION_BUDGET_MS
       )
     };
   }
@@ -199,6 +205,10 @@ var PRAConfig = (function () {
     if (!Number.isInteger(policy.maxOrderDetailsPerRun) ||
         policy.maxOrderDetailsPerRun < 1 || policy.maxOrderDetailsPerRun > 100) {
       invalid.push(KEYS.BLING_MAX_ORDER_DETAILS_PER_RUN);
+    }
+    if (!Number.isInteger(policy.executionBudgetMs) ||
+        policy.executionBudgetMs < 60000 || policy.executionBudgetMs > 330000) {
+      invalid.push(KEYS.BLING_EXECUTION_BUDGET_MS);
     }
 
     return {

@@ -32,9 +32,10 @@ var PRAProductSupplierStore = (function () {
     return candidate;
   }
 
-  function number_(value) {
+  function optionalNumber_(value) {
+    if (value === '' || value === null || typeof value === 'undefined') return '';
     var candidate = Number(value);
-    return Number.isFinite(candidate) ? candidate : 0;
+    return Number.isFinite(candidate) ? candidate : '';
   }
 
   function ensureSheet_(spreadsheet, name, headers) {
@@ -58,16 +59,6 @@ var PRAProductSupplierStore = (function () {
       .filter(function (row) {
         return row.some(function (cell) { return cell !== '' && cell !== null; });
       });
-  }
-
-  function replaceRows_(sheet, rows, width) {
-    var existingRows = Math.max(sheet.getLastRow() - 1, 0);
-    if (existingRows > 0) {
-      sheet.getRange(2, 1, existingRows, width).clearContent();
-    }
-    if (rows.length > 0) {
-      sheet.getRange(2, 1, rows.length, width).setValues(rows);
-    }
   }
 
   function mergeByLinkId_(existing, incoming) {
@@ -98,8 +89,8 @@ var PRAProductSupplierStore = (function () {
       positiveId_(link.fornecedor && link.fornecedor.id, 'ID do fornecedor'),
       String(value_(link.descricao, '')),
       String(value_(link.codigo, '')),
-      number_(link.precoCusto),
-      number_(link.precoCompra),
+      optionalNumber_(link.precoCusto),
+      optionalNumber_(link.precoCompra),
       Boolean(link.padrao),
       timestamp,
       String(metadata.runId || '')
@@ -122,7 +113,7 @@ var PRAProductSupplierStore = (function () {
       var spreadsheet = SpreadsheetApp.openById(spreadsheetId);
       var sheet = ensureSheet_(spreadsheet, LINK_SHEET_NAME, LINK_HEADERS);
       var merged = mergeByLinkId_(readRows_(sheet, LINK_HEADERS.length), incoming);
-      replaceRows_(sheet, merged, LINK_HEADERS.length);
+      PRASheetWriter.replaceRows(sheet, LINK_HEADERS.length, merged);
       return {
         ok: true,
         linksStored: incoming.length,
@@ -149,8 +140,10 @@ var PRAProductSupplierStore = (function () {
   }
 
   function compareNumber_(left, right) {
-    var a = Number(left);
-    var b = Number(right);
+    var a = left === '' || left === null || typeof left === 'undefined'
+      ? Number.POSITIVE_INFINITY : Number(left);
+    var b = right === '' || right === null || typeof right === 'undefined'
+      ? Number.POSITIVE_INFINITY : Number(right);
     if (!Number.isFinite(a)) a = Number.POSITIVE_INFINITY;
     if (!Number.isFinite(b)) b = Number.POSITIVE_INFINITY;
     return a - b;
@@ -218,8 +211,6 @@ var PRAProductSupplierStore = (function () {
         return String(row[9]) === targetRunId;
       });
 
-      replaceRows_(linkSheet, currentLinks, LINK_HEADERS.length);
-
       var grouped = {};
       currentLinks.forEach(function (row) {
         var productId = String(row[1]);
@@ -250,7 +241,10 @@ var PRAProductSupplierStore = (function () {
         ];
       });
 
-      replaceRows_(statusSheet, statusRows, STATUS_HEADERS.length);
+      PRASheetWriter.replaceMany([
+        { sheet: linkSheet, width: LINK_HEADERS.length, rows: currentLinks },
+        { sheet: statusSheet, width: STATUS_HEADERS.length, rows: statusRows }
+      ]);
       return {
         ok: true,
         linksStored: currentLinks.length,

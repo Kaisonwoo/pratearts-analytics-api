@@ -64,16 +64,6 @@ var PRATransformService = (function () {
       });
   }
 
-  function replaceRows_(sheet, definition, rows) {
-    var existing = Math.max(sheet.getLastRow() - 1, 0);
-    if (existing > 0) {
-      sheet.getRange(2, 1, existing, definition.headers.length).clearContent();
-    }
-    if (rows.length > 0) {
-      sheet.getRange(2, 1, rows.length, definition.headers.length).setValues(rows);
-    }
-  }
-
   function text_(value) {
     if (value === null || typeof value === 'undefined') return '';
     return String(value).trim();
@@ -276,7 +266,14 @@ var PRATransformService = (function () {
     return merged;
   }
 
-  function run() {
+  function run(options) {
+    options = options || {};
+    var policy = PRAConfig.getRequestPolicy ? PRAConfig.getRequestPolicy() : {};
+    var budget = PRARuntimeBudget.create({
+      budgetMs: options.maxRuntimeMs || policy.executionBudgetMs || 270000,
+      deadlineAtMs: options.deadlineAtMs,
+      reserveMs: typeof options.reserveMs === 'undefined' ? 15000 : options.reserveMs
+    });
     var spreadsheetId = PRAConfig.requirePublicValue(PRAConfig.KEYS.DATA_SPREADSHEET_ID);
     var lock = LockService.getScriptLock();
     lock.waitLock(LOCK_TIMEOUT_MS);
@@ -311,9 +308,23 @@ var PRATransformService = (function () {
       var existingQualityRows = readRows_(qualitySheet, qualitySchema);
       var qualityRows = mergeQualityErrors_(existingQualityRows, errors, processedAt, runId);
 
-      replaceRows_(stgOrdersSheet, stgOrdersSchema, stagedOrders);
-      replaceRows_(stgItemsSheet, stgItemsSchema, stagedItems);
-      replaceRows_(qualitySheet, qualitySchema, qualityRows);
+      if (budget.shouldYield()) {
+        return {
+          ok: true,
+          status: 'in_progress',
+          code: 'orders_normalization_budget_reached',
+          runId: runId,
+          ordersRead: rawOrders.length,
+          itemsRead: rawItems.length,
+          processedAt: processedAt
+        };
+      }
+
+      PRASheetWriter.replaceMany([
+        { sheet: stgOrdersSheet, width: stgOrdersSchema.headers.length, rows: stagedOrders },
+        { sheet: stgItemsSheet, width: stgItemsSchema.headers.length, rows: stagedItems },
+        { sheet: qualitySheet, width: qualitySchema.headers.length, rows: qualityRows }
+      ]);
 
       var unresolvedErrors = qualityRows.filter(function (row) {
         return String(row[0] || '').indexOf(NORMALIZATION_PREFIX) === 0 && !row[6];
