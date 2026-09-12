@@ -28,6 +28,9 @@ Pedidos são atualizados por `order_id`. Antes de gravar os itens atuais, os
 itens anteriores do mesmo pedido são substituídos. Assim, uma reexecução não
 duplica linhas e também remove itens que deixaram de existir na origem.
 
+Pedidos, itens e erros são confirmados como um lote lógico. Uma falha em
+qualquer aba restaura as abas já alteradas, preservando a última base válida.
+
 ## Execução
 
 1. Execute novamente `runInitialOrdersLoad` para o período desejado depois de
@@ -35,6 +38,9 @@ duplica linhas e também remove itens que deixaram de existir na origem.
 2. Execute `runOrderDetailsBatch`. O lote padrão contém 20 pedidos.
 3. Repita enquanto o retorno for `in_progress`. O estado `completed` indica
    fila vazia; `completed_with_errors` indica falhas permanentes registradas.
+
+Quando a fila fica vazia e `order_detail_errors` não possui falhas abertas, as
+janelas históricas em `waiting_details` são promovidas para `pending`.
 
 ## Segurança
 

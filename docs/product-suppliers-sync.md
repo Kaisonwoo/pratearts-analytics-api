@@ -52,6 +52,10 @@ Valores suportados:
 - `lowest_cost_price`: prioriza o menor `precoCusto` e usa o vínculo padrão/menor `link_id` como desempate;
 - `lowest_supplier_id`: prioriza o menor ID técnico de fornecedor e usa o vínculo padrão/menor `link_id` como desempate.
 
+Nas regras de preço e custo, campo ausente ou inválido não é convertido em
+zero e fica depois de qualquer valor numérico válido. Isso evita selecionar
+como mais barato um vínculo cujo preço não foi informado.
+
 Uma regra não suportada bloqueia a execução antes da coleta.
 
 ## Checkpoint e retomada
@@ -82,6 +86,9 @@ runProductSuppliersSync(true)
 ```
 
 O `reset` não apaga a fotografia confirmada anterior. Os vínculos parciais de uma execução interrompida só substituem a fotografia anterior depois que a nova reconciliação é concluída.
+
+A rotina também respeita `BLING_EXECUTION_BUDGET_MS`. Ao atingir a margem
+segura, salva a página atual e retorna `execution_budget_reached` para retomada.
 
 ## Segurança e observabilidade
 

@@ -29,13 +29,7 @@ var PRARecalculationWindowStore = (function () {
     });
   }
 
-  function replaceRows_(sheet, rows) {
-    var existing = Math.max(sheet.getLastRow() - 1, 0);
-    if (existing > 0) sheet.getRange(2, 1, existing, HEADERS.length).clearContent();
-    if (rows.length > 0) sheet.getRange(2, 1, rows.length, HEADERS.length).setValues(rows);
-  }
-
-  function markWindow(windowStart, windowEnd, reason, runId) {
+  function upsertWindow_(windowStart, windowEnd, reason, runId, status) {
     var start = String(windowStart || '');
     var end = String(windowEnd || '');
     var markerReason = String(reason || 'historical_reconciliation');
@@ -61,15 +55,50 @@ var PRARecalculationWindowStore = (function () {
           break;
         }
       }
-      var row = [key, start, end, markerReason, 'pending', timestamp, markerRunId];
+      var row = [key, start, end, markerReason, status, timestamp, markerRunId];
       if (position >= 0) rows[position] = row;
       else rows.push(row);
-      replaceRows_(sheet, rows);
-      return { ok: true, recalcKey: key, status: 'pending', markedAt: timestamp };
+      PRASheetWriter.replaceRows(sheet, HEADERS.length, rows);
+      return { ok: true, recalcKey: key, status: status, markedAt: timestamp };
     } finally {
       lock.releaseLock();
     }
   }
 
-  return Object.freeze({ markWindow: markWindow });
+  function stageWindow(windowStart, windowEnd, reason, runId) {
+    return upsertWindow_(windowStart, windowEnd, reason, runId, 'waiting_details');
+  }
+
+  function markWindow(windowStart, windowEnd, reason, runId) {
+    return upsertWindow_(windowStart, windowEnd, reason, runId, 'pending');
+  }
+
+  function activateWaitingWindows() {
+    var spreadsheetId = PRAConfig.requirePublicValue(PRAConfig.KEYS.DATA_SPREADSHEET_ID);
+    var lock = LockService.getScriptLock();
+    lock.waitLock(LOCK_TIMEOUT_MS);
+    try {
+      var spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+      var sheet = ensureSheet_(spreadsheet);
+      var rows = readRows_(sheet);
+      var timestamp = new Date().toISOString();
+      var activated = 0;
+      rows.forEach(function (row) {
+        if (String(row[4]) !== 'waiting_details') return;
+        row[4] = 'pending';
+        row[5] = timestamp;
+        activated += 1;
+      });
+      if (activated > 0) PRASheetWriter.replaceRows(sheet, HEADERS.length, rows);
+      return { ok: true, activated: activated, status: 'pending', activatedAt: timestamp };
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  return Object.freeze({
+    stageWindow: stageWindow,
+    markWindow: markWindow,
+    activateWaitingWindows: activateWaitingWindows
+  });
 })();

@@ -1475,6 +1475,10 @@ test('coletor de detalhes preserva campos de itens e registra erro permanente', 
   const acknowledgements = [];
   const logs = [];
   const context = vm.createContext({
+    PRAExecutionLease: {
+      acquire: () => ({ acquired: true }),
+      release: () => true
+    },
     PRAConfig: {
       KEYS: { DATA_SPREADSHEET_ID: 'DATA_SPREADSHEET_ID' },
       getRequestPolicy: () => ({ maxOrderDetailsPerRun: 20 }),
@@ -1542,6 +1546,11 @@ test('coletor de detalhes preserva campos de itens e registra erro permanente', 
     JSON
   });
   vm.runInContext(
+    await readFile(path.join(root, 'src/core/RuntimeBudget.gs'), 'utf8'),
+    context,
+    { filename: 'src/core/RuntimeBudget.gs' }
+  );
+  vm.runInContext(
     await readFile(path.join(root, 'src/jobs/OrderDetailsJob.gs'), 'utf8'),
     context,
     { filename: 'src/jobs/OrderDetailsJob.gs' }
@@ -1567,6 +1576,10 @@ test('falha retomável permanece na fila e falha de armazenamento não confirma 
   let acknowledgeCalls = 0;
   let storageShouldFail = false;
   const context = vm.createContext({
+    PRAExecutionLease: {
+      acquire: () => ({ acquired: true }),
+      release: () => true
+    },
     PRAConfig: {
       KEYS: { DATA_SPREADSHEET_ID: 'DATA_SPREADSHEET_ID' },
       getRequestPolicy: () => ({ maxOrderDetailsPerRun: 20 }),
@@ -1611,6 +1624,11 @@ test('falha retomável permanece na fila e falha de armazenamento não confirma 
     JSON
   });
   vm.runInContext(
+    await readFile(path.join(root, 'src/core/RuntimeBudget.gs'), 'utf8'),
+    context,
+    { filename: 'src/core/RuntimeBudget.gs' }
+  );
+  vm.runInContext(
     await readFile(path.join(root, 'src/jobs/OrderDetailsJob.gs'), 'utf8'),
     context,
     { filename: 'src/jobs/OrderDetailsJob.gs' }
@@ -1627,6 +1645,62 @@ test('falha retomável permanece na fila e falha de armazenamento não confirma 
   assert.equal(failedStore.ok, false);
   assert.equal(failedStore.code, 'order_details_storage_failed');
   assert.equal(acknowledgeCalls, 1);
+});
+
+test('detalhes persistidos ativam janelas de recálculo somente com fila e erros zerados', async () => {
+  let activations = 0;
+  const context = vm.createContext({
+    PRAExecutionLease: {
+      acquire: () => ({ acquired: true }),
+      release: () => true
+    },
+    PRAConfig: {
+      KEYS: { DATA_SPREADSHEET_ID: 'DATA_SPREADSHEET_ID' },
+      getRequestPolicy: () => ({ maxOrderDetailsPerRun: 20, executionBudgetMs: 270000 }),
+      getPublicValue: () => 'spreadsheet-test'
+    },
+    PRAOrderDetailsQueue: {
+      peek: () => [{ id: '301', attempts: 0 }],
+      getSummary: () => ({ pending: 1 }),
+      acknowledge: () => ({ pending: 0 })
+    },
+    PRABlingClient: {
+      get: () => ({ ok: true, data: { id: 301, itens: [] } })
+    },
+    PRAOrderDetailsStore: {
+      persistBatch: () => ({
+        ordersStored: 1,
+        itemsStored: 0,
+        errorsStored: 0,
+        unresolvedErrors: 0,
+        updatedAt: '2026-09-12T00:00:00.000Z'
+      })
+    },
+    PRARecalculationWindowStore: {
+      activateWaitingWindows: () => {
+        activations += 1;
+        return { ok: true, activated: 1 };
+      }
+    },
+    PRALogger: { info() {}, error() {} },
+    Utilities: { getUuid: () => 'detail-run-activation' },
+    Date, Number, Object, String, Boolean, Array, JSON, Math
+  });
+  vm.runInContext(
+    await readFile(path.join(root, 'src/core/RuntimeBudget.gs'), 'utf8'),
+    context,
+    { filename: 'src/core/RuntimeBudget.gs' }
+  );
+  vm.runInContext(
+    await readFile(path.join(root, 'src/jobs/OrderDetailsJob.gs'), 'utf8'),
+    context,
+    { filename: 'src/jobs/OrderDetailsJob.gs' }
+  );
+
+  const result = vm.runInContext('PRAOrderDetailsJob.run({ maxOrders: 1 })', context);
+  assert.equal(result.status, 'completed');
+  assert.equal(result.recalcWindowsActivated, 1);
+  assert.equal(activations, 1);
 });
 
 class FakeRange {
@@ -1724,6 +1798,11 @@ test('armazenamento substitui pedido e itens pela chave sem duplicação', async
     Array,
     JSON
   });
+  vm.runInContext(
+    await readFile(path.join(root, 'src/core/SheetWriter.gs'), 'utf8'),
+    context,
+    { filename: 'src/core/SheetWriter.gs' }
+  );
   vm.runInContext(
     await readFile(path.join(root, 'src/repositories/OrderDetailsStore.gs'), 'utf8'),
     context,
@@ -1947,6 +2026,11 @@ test('armazenamento de produtos mantém pai, filho e produto simples sem duplica
     Array,
     JSON
   });
+  vm.runInContext(
+    await readFile(path.join(root, 'src/core/SheetWriter.gs'), 'utf8'),
+    context,
+    { filename: 'src/core/SheetWriter.gs' }
+  );
   vm.runInContext(
     await readFile(path.join(root, 'src/repositories/ProductStore.gs'), 'utf8'),
     context,

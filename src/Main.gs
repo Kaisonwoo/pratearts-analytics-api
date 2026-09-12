@@ -42,12 +42,26 @@ function runDailySync() {
 }
 
 /**
+ * Continua automaticamente o pipeline diario quando a execucao anterior
+ * encerrou de forma segura por orcamento de tempo ou por lotes pendentes.
+ * @return {Object} Resumo operacional seguro da continuacao.
+ */
+function runDailySyncContinuation() {
+  return PRADailySyncJob.run();
+}
+
+/**
  * Executa ou retoma manualmente a sincronização incremental de pedidos.
  * @param {boolean} reset Reinicia o checkpoint incremental quando true.
  * @return {Object} Resumo operacional seguro da execução.
  */
 function runIncrementalOrdersSync(reset) {
-  return PRADailySyncJob.run({ reset: Boolean(reset) });
+  return PRAOrdersIncrementalSync.run({
+    reset: Boolean(reset),
+    onPage: function (orders, page, context) {
+      return PRAOrderDetailsQueue.enqueuePage(orders, page, context);
+    }
+  });
 }
 
 /**

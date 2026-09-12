@@ -79,6 +79,9 @@ var PRAOrdersReconciliationJob = (function () {
     var requestPolicy = PRAConfig.getRequestPolicy();
     var pageSize = Number(options.pageSize || requestPolicy.pageSize);
     var maxPagesPerRun = Number(options.maxPagesPerRun || requestPolicy.maxPagesPerRun);
+    var executionBudgetMs = Number(
+      options.maxRuntimeMs || requestPolicy.executionBudgetMs || 270000
+    );
     var windowDays = typeof options.windowDays !== 'undefined'
       ? Number(options.windowDays)
       : publicInteger_(WINDOW_DAYS_KEY, DEFAULT_WINDOW_DAYS);
@@ -98,6 +101,13 @@ var PRAOrdersReconciliationJob = (function () {
     if (!Number.isInteger(maxPagesPerRun) || maxPagesPerRun < 1 || maxPagesPerRun > 100) {
       return failure_('page_budget_invalid', 'O orçamento de páginas deve estar entre 1 e 100.', {});
     }
+    if (!Number.isInteger(executionBudgetMs) || executionBudgetMs < 1000 || executionBudgetMs > 330000) {
+      return failure_(
+        'execution_budget_invalid',
+        'O orcamento de execucao deve estar entre 1000 e 330000 ms.',
+        {}
+      );
+    }
 
     return {
       ok: true,
@@ -106,7 +116,8 @@ var PRAOrdersReconciliationJob = (function () {
       frequencyDays: frequencyDays,
       pageSize: pageSize,
       maxPages: requestPolicy.maxPages,
-      maxPagesPerRun: maxPagesPerRun
+      maxPagesPerRun: maxPagesPerRun,
+      executionBudgetMs: executionBudgetMs
     };
   }
 
@@ -193,7 +204,7 @@ var PRAOrdersReconciliationJob = (function () {
 
   function markRecalculation_(checkpoint) {
     try {
-      PRARecalculationWindowStore.markWindow(
+      PRARecalculationWindowStore.stageWindow(
         checkpoint.windowStart,
         checkpoint.windowEnd,
         'historical_reconciliation',
@@ -203,8 +214,8 @@ var PRAOrdersReconciliationJob = (function () {
     } catch (error) {
       PRALogger.error('reconciliation_recalc_mark_failed', { runId: checkpoint.runId });
       return failure_(
-        'recalc_mark_failed',
-        'A janela foi coletada, mas não foi possível marcar o recálculo.',
+        'recalc_stage_failed',
+        'A janela foi coletada, mas nao foi possivel aguardar os detalhes para recalculo.',
         {
           runId: checkpoint.runId,
           windowStart: checkpoint.windowStart,
@@ -215,10 +226,15 @@ var PRAOrdersReconciliationJob = (function () {
     }
   }
 
-  function run(options) {
+  function runUnlocked_(options) {
     options = options || {};
     var settings = settings_(options);
     if (!settings.ok) return settings;
+    var budget = PRARuntimeBudget.create({
+      budgetMs: settings.executionBudgetMs,
+      deadlineAtMs: options.deadlineAtMs,
+      reserveMs: typeof options.reserveMs === 'undefined' ? 15000 : options.reserveMs
+    });
     if (options.reset) clearCheckpoint_();
 
     var checkpoint = readJson_(CHECKPOINT_KEY);
@@ -245,6 +261,20 @@ var PRAOrdersReconciliationJob = (function () {
 
     var pagesThisRun = 0;
     while (pagesThisRun < settings.maxPagesPerRun) {
+      if (budget.shouldYield()) {
+        saveCheckpoint_(checkpoint);
+        return {
+          ok: true,
+          status: 'in_progress',
+          code: 'execution_budget_reached',
+          runId: checkpoint.runId,
+          windowStart: checkpoint.windowStart,
+          windowEnd: checkpoint.windowEnd,
+          pagesFetched: checkpoint.pagesFetched,
+          recordsFetched: checkpoint.recordsFetched,
+          nextPage: checkpoint.nextPage
+        };
+      }
       if (checkpoint.pagesFetched >= settings.maxPages) {
         return failure_(
           'page_limit_reached',
@@ -332,6 +362,22 @@ var PRAOrdersReconciliationJob = (function () {
       recordsFetched: checkpoint.recordsFetched,
       nextPage: checkpoint.nextPage
     };
+  }
+
+  function run(options) {
+    var lease = PRAExecutionLease.acquire('orders_reconciliation');
+    if (!lease.acquired) {
+      return failure_(
+        'execution_in_progress',
+        'Ja existe uma reconciliacao historica em andamento.',
+        { retryAfter: new Date(lease.expiresAt).toISOString() }
+      );
+    }
+    try {
+      return runUnlocked_(options);
+    } finally {
+      PRAExecutionLease.release(lease);
+    }
   }
 
   return Object.freeze({ run: run });
