@@ -29,7 +29,8 @@ Ao concluir a última página, o checkpoint temporário é removido e um resumo 
 ## Entradas
 
 - `runDailySync()` executa o pipeline diário: incremental, reconciliação quando
-  devida, coleta de detalhes e normalização quando a fila fica vazia.
+  devida, coleta de detalhes e, quando a fila fica vazia, o pipeline analítico
+  que normaliza, calcula o faturamento por item e reaplica a venda válida.
 - `runDailySyncContinuation()` é o handler interno usado para retomar o pipeline
   sem criar gatilhos duplicados.
 - `runIncrementalOrdersSync(reset)` permite execução manual e reinício explícito do checkpoint.

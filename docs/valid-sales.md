@@ -25,7 +25,7 @@ A reconciliação histórica pode reenfileirar um pedido já processado quando s
 
 Na execução seguinte de `runOrdersNormalization()`:
 
-1. o `TransformService` reconstrói o pedido no staging com o `status_id` atual;
+1. o `TransformService` reconstrói pedidos e itens, inclusive `item_revenue`;
 2. o `PRAValidSalesService` recalcula `is_valid_sale`;
 3. um pedido que saiu de Atendido passa de `true` para `false` e deixa de ser elegível para os futuros KPIs.
 
@@ -44,7 +44,7 @@ IDs de pedidos, valores, SKUs e outros dados comerciais não são enviados aos l
 
 ## Execução
 
-- `runOrdersNormalization()` normaliza os dados e aplica a regra de venda válida em sequência.
+- `runOrdersNormalization()` usa `PRAOrdersAnalyticsPipeline` para normalizar, calcular o faturamento por item e aplicar a regra de venda válida em sequência.
 - `runValidSalesClassification()` reaplica somente a regra sobre o staging atual.
 
 As histórias de métricas e marts devem considerar apenas pedidos com `is_valid_sale = true`.

@@ -16,11 +16,12 @@ Executa autenticação, chamadas HTTP, paginação, retentativas, normalização
 
 ### Google Sheets
 
-Armazenamento inicial do MVP, separado em três camadas:
+Armazenamento inicial do MVP, separado em quatro camadas:
 
 - `raw`: resposta preservada da origem e metadados da coleta;
 - `staging`: dados normalizados e relacionamentos;
-- `analytics`: indicadores prontos para consumo.
+- `mart`: indicadores prontos para consumo;
+- `logs`: execução, qualidade e janelas de recálculo.
 
 ### Dashboard
 
@@ -33,7 +34,7 @@ Visualização exclusiva para a Administração. A tecnologia definitiva será v
 3. O cliente Bling valida ou renova o token.
 4. Coletores consultam páginas respeitando os limites da API.
 5. Dados brutos são gravados antes do tratamento.
-6. Serviços normalizam entidades e calculam indicadores.
+6. Serviços normalizam entidades, classificam vendas válidas e calculam indicadores.
 7. O estado do lote permite retomada após falha.
 8. Logs registram somente metadados não sensíveis.
 
@@ -54,6 +55,10 @@ somente depois da gravação idempotente em `raw_products`. A chave técnica é 
 ID do Bling, o SKU é preservado para conferência e `parent_product_id` mantém a
 relação entre variação e produto pai. Produtos sem pai permanecem disponíveis
 por seu próprio ID.
+
+Pedidos e itens detalhados passam pelo `PRAOrdersAnalyticsPipeline`. O estágio
+calcula o faturamento por item sem frete, usando o desconto percentual do item,
+e reaplica a situação Atendido antes de liberar os dados para os futuros marts.
 
 ## Princípios
 

@@ -57,13 +57,13 @@ Executar a transformação novamente não duplica a mesma exceção. Se uma inco
 O `PRATransformService` permanece responsável somente pela consistência técnica. O ponto de entrada `runOrdersNormalization()` encadeia regras posteriores já implementadas para completar o staging:
 
 - `stg_orders.is_valid_sale` é preenchido pelo `PRAValidSalesService`, conforme a US-018 e o ID técnico configurado para a situação Atendido.
-- `stg_order_items.item_revenue` permanece reservado para a US-021, que definirá faturamento por item.
+- `stg_order_items.item_revenue` é calculado durante a normalização pelo contrato de PRA-25 / US-021: quantidade multiplicada pelo valor unitário, após o desconto percentual atribuível ao item e sem frete.
 
-Essa separação evita misturar normalização técnica com regras comerciais e mantém cada regra testável de forma independente.
+As fórmulas comerciais ficam isoladas no `PRAKpiService`, enquanto o TransformService garante que o resultado por item seja persistido no mesmo lote protegido do staging. Consulte [`kpis.md`](kpis.md).
 
 ## Execução
 
-Após a coleta dos detalhes, execute `runOrdersNormalization()` para reconstruir o staging e classificar as vendas válidas.
+Após a coleta dos detalhes, execute `runOrdersNormalization()` para reconstruir o staging, calcular o faturamento por item e classificar as vendas válidas.
 
 Antes de iniciar a gravação, a rotina verifica o orçamento compartilhado de
 execução. Se a margem segura tiver sido atingida, retorna

@@ -5,8 +5,10 @@ Integração analítica para transformar dados operacionais do Bling em relatór
 ## Estado atual
 
 Os Sprints 0, 1 e 2 foram concluídos. O projeto está no Sprint 3 — Transformação
-e regras de negócio, com normalização de pedidos e itens implementada e uma
-camada de hardening para consistência e retomada segura.
+e regras de negócio. A `main` contém normalização, classificação de venda válida,
+reconciliação de fornecedores e hardening para consistência e retomada segura.
+O cálculo unificado de faturamento, quantidade e ticket médio está em desenvolvimento
+em PRA-25 / PRA-65.
 
 ## Decisões do MVP
 
@@ -100,7 +102,10 @@ Para reconciliar produtos, SKUs e relações pai/filho, consulte [`docs/products
 
 Para reconciliar vínculos produto-fornecedor, sinalizar ausência ou múltiplos fornecedores e configurar a regra de fornecedor principal, consulte [`docs/product-suppliers-sync.md`](docs/product-suppliers-sync.md).
 
-`runDailySync()` orquestra incremental, reconciliação, detalhes e normalização.
+Para consultar as fórmulas de faturamento por item, quantidade e ticket médio, consulte [`docs/kpis.md`](docs/kpis.md).
+
+`runDailySync()` orquestra incremental, reconciliação, detalhes e o pipeline
+analítico de normalização, faturamento por item e classificação de venda válida.
 Quando o orçamento seguro se encerra, o Apps Script agenda uma única continuação
 por `runDailySyncContinuation()`.
 
@@ -139,7 +144,10 @@ Esse comando valida a estrutura, o manifesto e padrões comuns de vazamento de s
 - Sincronização incremental: PRA-21 / US-015 e PRA-56 / TT-015
 - Reconciliação histórica: PRA-22 / US-016 e PRA-55 / TT-016
 - Normalização de pedidos e itens: PRA-23 / US-017 e PRA-58 / TT-017
+- Regra de venda válida Atendido: PRA-24 / US-018 e PRA-59 / TT-018
 - Hardening de consistência e retomada: PRA-83
+- Persistência segura de vínculos produto-fornecedor: PRA-84
+- Faturamento, quantidade e ticket médio: PRA-25 / US-021 e PRA-65 / TT-021
 
 ## Referências oficiais
 
