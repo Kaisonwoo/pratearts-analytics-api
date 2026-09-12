@@ -25,6 +25,7 @@ const requiredFiles = [
   'docs/reconciliation.md',
   'docs/normalization.md',
   'docs/valid-sales.md',
+  'docs/kpis.md',
   'docs/samples/bling/product-detail-with-variations.json',
   'docs/samples/bling/product-list.json',
   'docs/samples/bling/product-supplier-list.json',
@@ -61,7 +62,9 @@ const requiredFiles = [
   'src/services/HealthService.gs',
   'src/services/OAuthService.gs',
   'src/services/TransformService.gs',
-  'src/services/ValidSalesService.gs'
+  'src/services/ValidSalesService.gs',
+  'src/services/KpiService.gs',
+  'src/services/OrdersAnalyticsPipeline.gs'
 ];
 
 for (const relative of requiredFiles) {

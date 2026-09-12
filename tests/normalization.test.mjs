@@ -97,6 +97,7 @@ async function createFixture() {
     'src/repositories/DataLayerSchema.gs',
     'src/core/RuntimeBudget.gs',
     'src/core/SheetWriter.gs',
+    'src/services/KpiService.gs',
     'src/services/TransformService.gs'
   ]) {
     const code = await readFile(path.join(root, file), 'utf8');
@@ -181,6 +182,8 @@ test('TransformService normaliza tipos, datas e chaves estáveis', async () => {
   assert.equal(result.status, 'completed');
   assert.equal(result.ordersStaged, 1);
   assert.equal(result.itemsStaged, 1);
+  assert.equal(result.itemRevenueCalculated, 1);
+  assert.equal(result.itemRevenueErrors, 0);
   assert.equal(result.qualityErrors, 0);
 
   const stgOrders = f.spreadsheet.sheets.get('stg_orders');
@@ -207,9 +210,35 @@ test('TransformService normaliza tipos, datas e chaves estáveis', async () => {
   assert.equal(item[4], 2);
   assert.equal(item[5], 75.25);
   assert.equal(item[6], 0);
-  assert.equal(item[7], '');
+  assert.equal(item[7], 150.5);
   assert.equal(item[8], '2026-09-11T10:00:00.000Z');
   assert.equal(item[10], result.runId);
+});
+
+test('TransformService grava desconto percentual e faturamento no lote protegido', async () => {
+  const f = await createFixture();
+  f.seed('raw_orders', [validOrder()]);
+  f.seed('raw_order_items', [validItem({ quantity: 2, unit_value: 75.25, discount: 10 })]);
+
+  const result = f.context.PRATransformService.run();
+  const item = normalized(f.spreadsheet.sheets.get('stg_order_items').values[1]);
+  assert.equal(result.itemRevenueCalculated, 1);
+  assert.equal(result.itemRevenueErrors, 0);
+  assert.equal(item[7], 135.45);
+});
+
+test('entrada inválida de faturamento fica vazia e auditável', async () => {
+  const f = await createFixture();
+  f.seed('raw_orders', [validOrder()]);
+  f.seed('raw_order_items', [validItem({ discount: 101 })]);
+
+  const result = f.context.PRATransformService.run();
+  const item = normalized(f.spreadsheet.sheets.get('stg_order_items').values[1]);
+  const codes = f.spreadsheet.sheets.get('data_quality_errors').values.slice(1).map((row) => row[3]);
+  assert.equal(result.itemRevenueCalculated, 0);
+  assert.equal(result.itemRevenueErrors, 1);
+  assert.equal(item[7], '');
+  assert.ok(codes.includes('invalid_item_revenue_inputs'));
 });
 
 test('chaves obrigatórias ausentes impedem staging e geram exceções', async () => {
@@ -256,6 +285,7 @@ test('campos inválidos são neutralizados e registrados sem derrubar a execuç�
   assert.equal(order[3], '');
   assert.equal(order[5], 0);
   assert.equal(item[4], 0);
+  assert.equal(item[7], '');
   assert.equal(item[8], '');
 
   const codes = f.spreadsheet.sheets.get('data_quality_errors').values.slice(1).map((row) => row[3]);
@@ -263,6 +293,7 @@ test('campos inválidos são neutralizados e registrados sem derrubar a execuç�
   assert.ok(codes.includes('invalid_status_id'));
   assert.ok(codes.includes('invalid_order_total'));
   assert.ok(codes.includes('invalid_quantity'));
+  assert.ok(codes.includes('invalid_item_revenue_inputs'));
   assert.ok(codes.includes('invalid_source_updated_at'));
 });
 
@@ -275,6 +306,8 @@ test('nova execução é idempotente e resolve exceção que deixou de existir',
   assert.ok(first.qualityErrors >= 1);
   assert.equal(f.spreadsheet.sheets.get('stg_orders').getLastRow(), 2);
   assert.equal(f.spreadsheet.sheets.get('stg_order_items').getLastRow(), 2);
+  const firstItemRevenue = f.spreadsheet.sheets.get('stg_order_items').values[1][7];
+  assert.equal(firstItemRevenue, 150.5);
 
   rawOrders.values[1][3] = '2026-09-10';
   const second = f.context.PRATransformService.run();
@@ -282,6 +315,10 @@ test('nova execução é idempotente e resolve exceção que deixou de existir',
   assert.equal(second.itemsStaged, 1);
   assert.equal(f.spreadsheet.sheets.get('stg_orders').getLastRow(), 2);
   assert.equal(f.spreadsheet.sheets.get('stg_order_items').getLastRow(), 2);
+  assert.equal(
+    f.spreadsheet.sheets.get('stg_order_items').values[1][7],
+    firstItemRevenue
+  );
 
   const qualityRows = f.spreadsheet.sheets.get('data_quality_errors').values.slice(1);
   const previousError = qualityRows.find((row) => row[3] === 'invalid_order_date');

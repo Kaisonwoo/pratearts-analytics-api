@@ -156,6 +156,11 @@ var PRATransformService = (function () {
     return candidate;
   }
 
+  function validNumberInput_(value, allowBlank) {
+    if (isBlank_(value)) return Boolean(allowBlank);
+    return Number.isFinite(Number(value));
+  }
+
   function orderRow_(raw, errors, processedAt, runId) {
     var fallbackKey = 'row-' + raw._sourceRow;
     var orderId = positiveId_(
@@ -212,15 +217,37 @@ var PRATransformService = (function () {
       addError_(errors, 'order_item', itemKey, 'missing_sku', 'warning', processedAt, runId);
     }
 
+    var quantity = number_(
+      raw.quantity, 'quantity', 'order_item', itemKey, true, errors, processedAt, runId
+    );
+    var unitValue = number_(
+      raw.unit_value, 'unit_value', 'order_item', itemKey, true, errors, processedAt, runId
+    );
+    var discount = number_(
+      raw.discount, 'discount', 'order_item', itemKey, false, errors, processedAt, runId
+    );
+    var itemRevenue = '';
+    var revenueInputsValid = validNumberInput_(raw.quantity, false) &&
+      validNumberInput_(raw.unit_value, false) && validNumberInput_(raw.discount, true);
+    try {
+      if (!revenueInputsValid) throw new Error('Entradas numéricas inválidas.');
+      itemRevenue = PRAKpiService.calculateItemRevenue(quantity, unitValue, discount);
+    } catch (error) {
+      addError_(
+        errors, 'order_item', itemKey, 'invalid_item_revenue_inputs',
+        'error', processedAt, runId
+      );
+    }
+
     return [
       itemKey,
       orderId,
       productId,
       sku,
-      number_(raw.quantity, 'quantity', 'order_item', itemKey, true, errors, processedAt, runId),
-      number_(raw.unit_value, 'unit_value', 'order_item', itemKey, true, errors, processedAt, runId),
-      number_(raw.discount, 'discount', 'order_item', itemKey, false, errors, processedAt, runId),
-      '',
+      quantity,
+      unitValue,
+      discount,
+      itemRevenue,
       timestamp_(raw.updated_at, 'order_item', itemKey, errors, processedAt, runId),
       processedAt,
       runId
@@ -304,6 +331,10 @@ var PRATransformService = (function () {
       var stagedItems = rawItems.map(function (raw) {
         return itemRow_(raw, stagedOrderIds, errors, processedAt, runId);
       }).filter(Boolean).sort(compareKeys_);
+      var itemRevenueCalculated = stagedItems.filter(function (row) {
+        return row[7] !== '' && row[7] !== null;
+      }).length;
+      var itemRevenueErrors = stagedItems.length - itemRevenueCalculated;
 
       var existingQualityRows = readRows_(qualitySheet, qualitySchema);
       var qualityRows = mergeQualityErrors_(existingQualityRows, errors, processedAt, runId);
@@ -316,6 +347,8 @@ var PRATransformService = (function () {
           runId: runId,
           ordersRead: rawOrders.length,
           itemsRead: rawItems.length,
+          itemRevenueCalculated: itemRevenueCalculated,
+          itemRevenueErrors: itemRevenueErrors,
           processedAt: processedAt
         };
       }
@@ -339,6 +372,8 @@ var PRATransformService = (function () {
         ordersStaged: stagedOrders.length,
         itemsRead: rawItems.length,
         itemsStaged: stagedItems.length,
+        itemRevenueCalculated: itemRevenueCalculated,
+        itemRevenueErrors: itemRevenueErrors,
         qualityErrors: unresolvedErrors,
         processedAt: processedAt
       };
@@ -348,6 +383,8 @@ var PRATransformService = (function () {
         ordersStaged: summary.ordersStaged,
         itemsRead: summary.itemsRead,
         itemsStaged: summary.itemsStaged,
+        itemRevenueCalculated: summary.itemRevenueCalculated,
+        itemRevenueErrors: summary.itemRevenueErrors,
         qualityErrors: summary.qualityErrors
       });
       return summary;

@@ -112,27 +112,13 @@ function runOrderDetailsBatch(maxOrders) {
 }
 
 /**
- * Normaliza pedidos e itens e, em seguida, aplica a regra de venda válida Atendido.
+ * Normaliza pedidos e itens, calcula faturamento por item e aplica a regra
+ * de venda válida Atendido.
  * Retorna somente contagens e metadados operacionais seguros.
  * @return {Object} Resumo seguro da transformação e classificação.
  */
 function runOrdersNormalization() {
-  var normalization = PRATransformService.run();
-  var validity = PRAValidSalesService.run();
-  return {
-    ok: Boolean(normalization.ok && validity.ok),
-    status: 'completed',
-    code: 'orders_normalization_completed',
-    runId: normalization.runId,
-    ordersRead: normalization.ordersRead,
-    ordersStaged: normalization.ordersStaged,
-    itemsRead: normalization.itemsRead,
-    itemsStaged: normalization.itemsStaged,
-    qualityErrors: normalization.qualityErrors,
-    validOrders: validity.validOrders,
-    excludedOrders: validity.excludedOrders,
-    processedAt: normalization.processedAt
-  };
+  return PRAOrdersAnalyticsPipeline.run();
 }
 
 /**

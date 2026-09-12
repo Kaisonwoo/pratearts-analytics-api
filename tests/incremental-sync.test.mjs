@@ -222,8 +222,8 @@ test('DailySync orquestra incremental, detalhes e normalizacao', async () => {
     PRAOrderDetailsJob: {
       run: () => ({ ok: true, status: 'completed', unresolvedErrors: 0, pending: 0 })
     },
-    PRATransformService: {
-      run: () => ({ ok: true, status: 'completed', code: 'orders_normalization_completed' })
+    PRAOrdersAnalyticsPipeline: {
+      run: () => ({ ok: true, status: 'completed', code: 'orders_analytics_completed' })
     },
     PRALogger: { info: () => {} },
     Date,
@@ -271,7 +271,7 @@ test('DailySync bloqueia normalização quando existem erros de detalhe não res
         pending: 0
       })
     },
-    PRATransformService: {
+    PRAOrdersAnalyticsPipeline: {
       run: () => {
         normalizationCalls += 1;
         return { ok: true, status: 'completed' };

@@ -92,7 +92,7 @@ var PRADailySyncJob = (function () {
     var unresolvedErrors = details && Number(details.unresolvedErrors || 0);
     if (upstreamComplete && queue.pending === 0 && unresolvedErrors === 0 &&
         details && details.ok && !budget.shouldYield()) {
-      normalization = PRATransformService.run({
+      normalization = PRAOrdersAnalyticsPipeline.run({
         maxRuntimeMs: executionBudgetMs,
         deadlineAtMs: budget.deadlineAtMs,
         reserveMs: budget.reserveMs
