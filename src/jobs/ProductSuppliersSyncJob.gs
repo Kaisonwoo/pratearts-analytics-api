@@ -42,6 +42,16 @@ var PRAProductSuppliersSyncJob = (function () {
     });
   }
 
+  function persistenceErrorCode_(error) {
+    var message = String(error && error.message || '');
+    if (message.indexOf('ID do vínculo') >= 0) return 'invalid_link_id';
+    if (message.indexOf('ID do produto') >= 0) return 'invalid_product_id';
+    if (message.indexOf('ID do fornecedor') >= 0) return 'invalid_supplier_id';
+    if (message.indexOf('Cabeçalho incompatível') >= 0) return 'sheet_header_incompatible';
+    if (error && error.code) return String(error.code);
+    return 'supplier_page_persistence_unknown';
+  }
+
   function validate_(options) {
     options = options || {};
     if (!PRAConfig.getPublicValue(PRAConfig.KEYS.DATA_SPREADSHEET_ID, null)) {
@@ -111,6 +121,7 @@ var PRAProductSuppliersSyncJob = (function () {
       nextPage: 1,
       pagesFetched: 0,
       linksFetched: 0,
+      linksRejected: 0,
       startedAt: now,
       updatedAt: now
     };
@@ -142,6 +153,7 @@ var PRAProductSuppliersSyncJob = (function () {
       phase: checkpoint.phase,
       pagesFetched: checkpoint.pagesFetched,
       linksFetched: checkpoint.linksFetched,
+      linksRejected: Number(checkpoint.linksRejected || 0),
       nextPage: checkpoint.nextPage,
       primaryRule: checkpoint.primaryRule,
       startedAt: checkpoint.startedAt,
@@ -190,6 +202,7 @@ var PRAProductSuppliersSyncJob = (function () {
       runId: checkpoint.runId,
       pagesFetched: checkpoint.pagesFetched,
       linksFetched: checkpoint.linksFetched,
+      linksRejected: Number(checkpoint.linksRejected || 0),
       productsEvaluated: completed.productsEvaluated,
       productsWithoutSupplier: completed.productsWithoutSupplier,
       productsWithMultipleSuppliers: completed.productsWithMultipleSuppliers,
@@ -285,7 +298,8 @@ var PRAProductSuppliersSyncJob = (function () {
       } catch (error) {
         PRALogger.error('product_suppliers_sync_page_persist_failed', {
           runId: current.runId,
-          page: current.nextPage
+          page: current.nextPage,
+          errorCode: persistenceErrorCode_(error)
         });
         return failure_(
           'page_persistence_failed',
@@ -303,6 +317,8 @@ var PRAProductSuppliersSyncJob = (function () {
 
       current.pagesFetched += 1;
       current.linksFetched += pageResult.data.length;
+      current.linksRejected = Number(current.linksRejected || 0) +
+        Number(stored.linksRejected || 0);
       current.nextPage += 1;
       current.updatedAt = stored.updatedAt || new Date().toISOString();
       pagesThisRun += 1;
@@ -328,6 +344,7 @@ var PRAProductSuppliersSyncJob = (function () {
       runId: current.runId,
       pagesFetched: current.pagesFetched,
       linksFetched: current.linksFetched,
+      linksRejected: Number(current.linksRejected || 0),
       nextPage: current.nextPage,
       primaryRule: current.primaryRule
     });

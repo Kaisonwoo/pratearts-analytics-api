@@ -38,5 +38,7 @@ Ao concluir a última página, o checkpoint temporário é removido e um resumo 
 
 O pipeline compartilha o prazo definido por `BLING_EXECUTION_BUDGET_MS`. Se uma
 etapa atingir a margem segura ou se restarem lotes, um único gatilho temporário
-é agendado para `runDailySyncContinuation`. Ao concluir, gatilhos temporários
-remanescentes são removidos.
+é agendado para `runDailySyncContinuation`. Cada continuação substitui o gatilho
+que a iniciou antes de programar o lote seguinte, evitando que o próprio
+acionador em execução seja confundido com uma continuação futura. Ao concluir,
+gatilhos temporários remanescentes são removidos.

@@ -10,7 +10,9 @@ var PRADailySyncJob = (function () {
     }
     try {
       return shouldContinue
-        ? PRAContinuationScheduler.schedule(CONTINUATION_HANDLER, 60000)
+        ? PRAContinuationScheduler.schedule(CONTINUATION_HANDLER, 60000, {
+          replaceExisting: Boolean(options.replaceContinuation)
+        })
         : PRAContinuationScheduler.cancel(CONTINUATION_HANDLER);
     } catch (error) {
       PRALogger.error('daily_sync_continuation_failed', {});

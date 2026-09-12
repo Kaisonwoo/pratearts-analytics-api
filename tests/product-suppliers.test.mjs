@@ -27,7 +27,7 @@ function createSyncContext({ pages = {}, pageSize = 2, maxPages = 100, maxPagesP
     persistPage: (links, metadata) => {
       if (store.shouldFailPersist) throw new Error('storage unavailable');
       persisted.push({ links, metadata });
-      return { linksStored: links.length, updatedAt: '2026-09-11T20:00:00.000Z' };
+      return { linksStored: links.length, linksRejected: 0, updatedAt: '2026-09-11T20:00:00.000Z' };
     },
     finalizeRun: (runId, rule) => {
       if (store.shouldFailFinalize) throw new Error('reconcile unavailable');
@@ -174,6 +174,26 @@ test('falha de persistência preserva página e permite nova tentativa', async (
   assert.deepEqual(fixture.calls.map((call) => Number(call.query.pagina)), [1, 1]);
 });
 
+test('falha de persistência registra somente uma classificação segura', async () => {
+  const fixture = createSyncContext({
+    pages: { 1: { data: [{ id: 7301 }] } },
+    maxPagesPerRun: 1
+  });
+  fixture.store.persistPage = () => {
+    throw new Error('ID do fornecedor técnico inválido no vínculo produto-fornecedor.');
+  };
+  await loadJob(fixture.context);
+
+  const result = vm.runInContext('PRAProductSuppliersSyncJob.run({})', fixture.context);
+  const errorLog = fixture.logs.find((entry) =>
+    entry.event === 'product_suppliers_sync_page_persist_failed'
+  );
+
+  assert.equal(result.code, 'page_persistence_failed');
+  assert.equal(errorLog.metadata.errorCode, 'invalid_supplier_id');
+  assert.deepEqual(Object.keys(errorLog.metadata).sort(), ['errorCode', 'page', 'runId']);
+});
+
 class FakeRange {
   constructor(sheet, row, column, rowCount, columnCount) {
     this.sheet = sheet;
@@ -283,7 +303,7 @@ test('reconciliação sinaliza produto sem, com um e com múltiplos fornecedores
   assert.equal(summary.productsWithSingleSupplier, 1);
   assert.equal(summary.productsWithMultipleSuppliers, 1);
 
-  const rows = dataRows(fixture.spreadsheet.getSheetByName('product_supplier_status'));
+  const rows = dataRows(fixture.spreadsheet.getSheetByName('stg_product_suppliers'));
   const none = rows.find((row) => String(row[0]) === '5103');
   const single = rows.find((row) => String(row[0]) === '5101');
   const multiple = rows.find((row) => String(row[0]) === '5102');
@@ -307,7 +327,7 @@ test('regra configurável pode escolher o menor preço de compra como principal'
     fixture.context
   );
 
-  const row = dataRows(fixture.spreadsheet.getSheetByName('product_supplier_status'))[0];
+  const row = dataRows(fixture.spreadsheet.getSheetByName('stg_product_suppliers'))[0];
   assert.equal(String(row[3]), '7202');
   assert.equal(String(row[4]), '6202');
   assert.equal(row[5], 'lowest_purchase_price');
@@ -324,9 +344,30 @@ test('preço ausente não vence um preço válido na escolha do fornecedor princ
     fixture.context
   );
 
-  const row = dataRows(fixture.spreadsheet.getSheetByName('product_supplier_status'))[0];
+  const row = dataRows(fixture.spreadsheet.getSheetByName('stg_product_suppliers'))[0];
   assert.equal(String(row[3]), '7302');
   assert.equal(String(row[4]), '6302');
+});
+
+test('vínculo sem fornecedor é rejeitado sem bloquear a página e gera erro idempotente', async () => {
+  const fixture = await createStoreContext([5401]);
+  const command = `PRAProductSupplierStore.persistPage([
+    { id: 6401, produto: { id: 5401 }, fornecedor: { id: 7401 } },
+    { id: 6402, produto: { id: 5401 }, fornecedor: {} }
+  ], { runId: 'supplier-d', page: 7 })`;
+
+  const first = vm.runInContext(command, fixture.context);
+  const second = vm.runInContext(command, fixture.context);
+
+  assert.equal(first.linksStored, 1);
+  assert.equal(first.linksRejected, 1);
+  assert.equal(second.linksRejected, 1);
+  assert.equal(dataRows(fixture.spreadsheet.getSheetByName('raw_product_suppliers')).length, 1);
+  const quality = dataRows(fixture.spreadsheet.getSheetByName('data_quality_errors'));
+  assert.equal(quality.length, 1);
+  assert.equal(quality[0][1], 'product_supplier_link');
+  assert.equal(quality[0][3], 'invalid_supplier_id');
+  assert.equal(quality[0][4], 'error');
 });
 
 test('coleta de fornecedores salva checkpoint ao atingir orçamento de tempo', async () => {

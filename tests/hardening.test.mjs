@@ -116,7 +116,7 @@ test('gravação escreve antes de remover a cauda antiga', async () => {
   assert.deepEqual(sheet.rows[2], ['', '']);
 });
 
-test('agendador evita gatilhos de continuação duplicados e permite cancelamento', async () => {
+test('agendador evita duplicados, substitui o gatilho em execução e permite cancelamento', async () => {
   const triggers = [];
   const context = vm.createContext({
     Object,
@@ -151,9 +151,38 @@ test('agendador evita gatilhos de continuação duplicados e permite cancelament
   assert.equal(duplicate.scheduled, false);
   assert.equal(triggers.length, 1);
 
+  const replacement = context.PRAContinuationScheduler.schedule(
+    'runDailySyncContinuation',
+    60000,
+    { replaceExisting: true }
+  );
+  assert.equal(replacement.scheduled, true);
+  assert.equal(replacement.replaced, 1);
+  assert.equal(triggers.length, 1);
+
   const cancelled = context.PRAContinuationScheduler.cancel('runDailySyncContinuation');
   assert.equal(cancelled.deleted, 1);
   assert.equal(triggers.length, 0);
+});
+
+test('handler temporário solicita substituição do próprio gatilho', async () => {
+  let options;
+  const context = vm.createContext({
+    Boolean,
+    PRAContinuationScheduler: {},
+    PRADailySyncJob: {
+      run(received) {
+        options = received;
+        return { ok: true };
+      }
+    }
+  });
+  await load('src/Main.gs', context);
+
+  const result = vm.runInContext('runDailySyncContinuation()', context);
+  assert.equal(result.ok, true);
+  assert.equal(options.replaceContinuation, true);
+  assert.deepEqual(Object.keys(options), ['replaceContinuation']);
 });
 
 test('lease impede uma segunda execução e libera somente o próprio token', async () => {
