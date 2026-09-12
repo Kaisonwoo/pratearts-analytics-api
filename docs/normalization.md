@@ -52,18 +52,18 @@ Exemplos de códigos:
 
 Executar a transformação novamente não duplica a mesma exceção. Se uma inconsistência deixa de existir, o registro anterior recebe `resolved_at`. Erros de qualidade produzidos por outros componentes são preservados.
 
-## Limites desta história
+## Regras posteriores ao TransformService
 
-A US-017 trata somente consistência técnica e reprodutibilidade dos registros. Duas colunas já reservadas no esquema permanecem sem valor nesta etapa:
+O `PRATransformService` permanece responsável somente pela consistência técnica. O ponto de entrada `runOrdersNormalization()` encadeia regras posteriores já implementadas para completar o staging:
 
-- `stg_orders.is_valid_sale`: será calculada na US-018 com a regra da situação Atendido.
-- `stg_order_items.item_revenue`: será calculada na US-021 com a definição oficial de faturamento por item.
+- `stg_orders.is_valid_sale` é preenchido pelo `PRAValidSalesService`, conforme a US-018 e o ID técnico configurado para a situação Atendido.
+- `stg_order_items.item_revenue` permanece reservado para a US-021, que definirá faturamento por item.
 
-Dessa forma, a normalização não incorpora regras comerciais antes de elas serem implementadas e testadas nas histórias correspondentes.
+Essa separação evita misturar normalização técnica com regras comerciais e mantém cada regra testável de forma independente.
 
 ## Execução
 
-Após a coleta dos detalhes, execute `runOrdersNormalization()` para reconstruir o staging a partir do estado raw mais recente.
+Após a coleta dos detalhes, execute `runOrdersNormalization()` para reconstruir o staging e classificar as vendas válidas.
 
 Antes de iniciar a gravação, a rotina verifica o orçamento compartilhado de
 execução. Se a margem segura tiver sido atingida, retorna
