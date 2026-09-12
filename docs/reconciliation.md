@@ -17,7 +17,10 @@ O checkpoint temporário fica em `BLING_RECONCILIATION_CHECKPOINT`. Ele contém 
 
 A página só avança depois que os IDs foram aceitos pela fila de detalhes. Se houver falha na API ou no enfileiramento, a próxima execução repete a mesma página.
 
-Quando a última página é encontrada, a rotina muda para a fase `mark`. Essa fase registra a janela em `recalc_windows`. Se a marcação falhar, a próxima execução repete apenas a marcação, sem consultar novamente as páginas do Bling.
+Quando a última página é encontrada, a rotina muda para a fase `mark`. Essa fase
+registra a janela em `recalc_windows` com estado `waiting_details`. Se o registro
+falhar, a próxima execução repete apenas essa fase, sem consultar novamente as
+páginas do Bling.
 
 O resumo da última reconciliação concluída fica em `BLING_LAST_RECONCILIATION_RUN`.
 
@@ -39,7 +42,13 @@ A aba `recalc_windows` pertence à camada de logs/controle e contém:
 - `marked_at`
 - `run_id`
 
-A chave é determinística por janela e motivo. Repetir a mesma reconciliação atualiza o mesmo marcador `pending`, em vez de gerar registros duplicados.
+A chave é determinística por janela e motivo. Repetir a mesma reconciliação
+atualiza o mesmo marcador, em vez de gerar registros duplicados.
+
+O estado muda de `waiting_details` para `pending` somente depois que
+`runOrderDetailsBatch()` confirma a persistência, esvazia a fila e não existem
+erros de detalhe sem resolução. Assim, consumidores de mart não recalculam uma
+janela contra dados raw antigos.
 
 A Sprint 3 poderá consumir esses marcadores para recalcular somente os indicadores afetados.
 

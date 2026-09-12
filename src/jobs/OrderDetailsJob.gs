@@ -23,12 +23,36 @@ var PRAOrderDetailsJob = (function () {
     return ['unauthorized', 'forbidden'].indexOf(response.error.code) >= 0;
   }
 
-  function run(options) {
+  function activateRecalculations_(pending, unresolvedErrors) {
+    if (Number(pending) > 0 || Number(unresolvedErrors) > 0) {
+      return { ok: true, activated: 0 };
+    }
+    if (typeof PRARecalculationWindowStore === 'undefined' ||
+        typeof PRARecalculationWindowStore.activateWaitingWindows !== 'function') {
+      return { ok: true, activated: 0 };
+    }
+    try {
+      return PRARecalculationWindowStore.activateWaitingWindows();
+    } catch (error) {
+      PRALogger.error('recalculation_activation_failed', {});
+      return { ok: false, activated: 0 };
+    }
+  }
+
+  function runUnlocked_(options) {
     options = options || {};
     var policy = PRAConfig.getRequestPolicy();
     var maxOrders = positiveLimit_(options.maxOrders, policy.maxOrderDetailsPerRun);
+    var executionBudgetMs = Number(options.maxRuntimeMs || policy.executionBudgetMs || 270000);
     if (!maxOrders) {
       return failure_('detail_batch_size_invalid', 'O lote deve conter entre 1 e 100 pedidos.', {});
+    }
+    if (!Number.isInteger(executionBudgetMs) || executionBudgetMs < 1000 || executionBudgetMs > 330000) {
+      return failure_(
+        'execution_budget_invalid',
+        'O orcamento de execucao deve estar entre 1000 e 330000 ms.',
+        {}
+      );
     }
     if (!PRAConfig.getPublicValue(PRAConfig.KEYS.DATA_SPREADSHEET_ID, null)) {
       return failure_(
@@ -42,7 +66,22 @@ var PRAOrderDetailsJob = (function () {
     var queueBefore = PRAOrderDetailsQueue.getSummary();
     var startedAt = new Date().toISOString();
     var runId = Utilities.getUuid();
+    var budget = PRARuntimeBudget.create({
+      budgetMs: executionBudgetMs,
+      deadlineAtMs: options.deadlineAtMs,
+      reserveMs: typeof options.reserveMs === 'undefined' ? 15000 : options.reserveMs
+    });
     if (queueEntries.length === 0) {
+      var unresolvedWhenEmpty = typeof PRAOrderDetailsStore.getUnresolvedErrorCount === 'function'
+        ? PRAOrderDetailsStore.getUnresolvedErrorCount() : 0;
+      var activationWhenEmpty = activateRecalculations_(0, unresolvedWhenEmpty);
+      if (!activationWhenEmpty.ok) {
+        return failure_(
+          'recalculation_activation_failed',
+          'Os detalhes foram concluidos, mas a janela de recalculo ainda nao foi ativada.',
+          { runId: runId, pending: 0, unresolvedErrors: unresolvedWhenEmpty }
+        );
+      }
       return {
         ok: true,
         status: 'completed',
@@ -54,6 +93,8 @@ var PRAOrderDetailsJob = (function () {
         errorsStored: 0,
         retryableFailures: 0,
         permanentFailures: 0,
+        unresolvedErrors: unresolvedWhenEmpty,
+        recalcWindowsActivated: Number(activationWhenEmpty.activated || 0),
         pending: 0,
         startedAt: startedAt,
         updatedAt: new Date().toISOString()
@@ -63,7 +104,9 @@ var PRAOrderDetailsJob = (function () {
     var details = [];
     var failures = [];
     var outcomes = [];
-    queueEntries.forEach(function (entry) {
+    for (var entryIndex = 0; entryIndex < queueEntries.length; entryIndex += 1) {
+      if (budget.shouldYield()) break;
+      var entry = queueEntries[entryIndex];
       var response = PRABlingClient.get(
         '/pedidos/vendas/' + entry.id,
         {},
@@ -72,7 +115,7 @@ var PRAOrderDetailsJob = (function () {
       if (response.ok && validDetail_(response.data, entry.id)) {
         details.push(response.data);
         outcomes.push({ id: entry.id, status: 'success' });
-        return;
+        continue;
       }
       var invalidResponse = response.ok;
       var retryable = shouldRetry_(response, invalidResponse);
@@ -89,7 +132,25 @@ var PRAOrderDetailsJob = (function () {
         id: entry.id,
         status: retryable ? 'retryable_failure' : 'permanent_failure'
       });
-    });
+    }
+
+    if (outcomes.length === 0) {
+      return {
+        ok: true,
+        status: 'in_progress',
+        code: 'execution_budget_reached',
+        runId: runId,
+        batchSize: 0,
+        ordersStored: 0,
+        itemsStored: 0,
+        errorsStored: 0,
+        retryableFailures: 0,
+        permanentFailures: 0,
+        pending: queueBefore.pending,
+        startedAt: startedAt,
+        updatedAt: new Date().toISOString()
+      };
+    }
 
     var stored;
     try {
@@ -116,6 +177,22 @@ var PRAOrderDetailsJob = (function () {
     var queueAfter = PRAOrderDetailsQueue.acknowledge(outcomes);
     var retryableFailures = failures.filter(function (failure) { return failure.retryable; }).length;
     var permanentFailures = failures.length - retryableFailures;
+    var unresolvedErrors = Number(stored.unresolvedErrors || 0);
+    var activation = activateRecalculations_(queueAfter.pending, unresolvedErrors);
+    if (!activation.ok) {
+      return failure_(
+        'recalculation_activation_failed',
+        'O lote foi persistido, mas a janela de recalculo ainda nao foi ativada.',
+        {
+          runId: runId,
+          batchSize: outcomes.length,
+          pending: queueAfter.pending,
+          unresolvedErrors: unresolvedErrors,
+          startedAt: startedAt,
+          updatedAt: stored.updatedAt
+        }
+      );
+    }
     var status = queueAfter.pending > 0 ? 'in_progress' :
       (permanentFailures > 0 ? 'completed_with_errors' : 'completed');
     var result = {
@@ -125,12 +202,14 @@ var PRAOrderDetailsJob = (function () {
         (status === 'completed_with_errors' ? 'order_details_completed_with_errors' :
           'order_details_completed'),
       runId: runId,
-      batchSize: queueEntries.length,
+      batchSize: outcomes.length,
       ordersStored: stored.ordersStored,
       itemsStored: stored.itemsStored,
       errorsStored: stored.errorsStored,
       retryableFailures: retryableFailures,
       permanentFailures: permanentFailures,
+      unresolvedErrors: unresolvedErrors,
+      recalcWindowsActivated: Number(activation.activated || 0),
       pending: queueAfter.pending,
       startedAt: startedAt,
       updatedAt: stored.updatedAt
@@ -145,6 +224,22 @@ var PRAOrderDetailsJob = (function () {
       pending: result.pending
     });
     return result;
+  }
+
+  function run(options) {
+    var lease = PRAExecutionLease.acquire('order_details');
+    if (!lease.acquired) {
+      return failure_(
+        'execution_in_progress',
+        'Ja existe um lote de detalhes em andamento.',
+        { retryAfter: new Date(lease.expiresAt).toISOString() }
+      );
+    }
+    try {
+      return runUnlocked_(options);
+    } finally {
+      PRAExecutionLease.release(lease);
+    }
   }
 
   return Object.freeze({ run: run });

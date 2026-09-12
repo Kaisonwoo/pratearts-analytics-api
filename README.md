@@ -4,7 +4,9 @@ Integração analítica para transformar dados operacionais do Bling em relatór
 
 ## Estado atual
 
-Os Sprints 0 e 1 foram concluídos. O projeto está no Sprint 2 — Coleta e persistência, com pedidos, detalhes, itens e produtos integrados e a reconciliação retomável dos vínculos produto-fornecedor em implementação.
+Os Sprints 0, 1 e 2 foram concluídos. O projeto está no Sprint 3 — Transformação
+e regras de negócio, com normalização de pedidos e itens implementada e uma
+camada de hardening para consistência e retomada segura.
 
 ## Decisões do MVP
 
@@ -98,6 +100,10 @@ Para reconciliar produtos, SKUs e relações pai/filho, consulte [`docs/products
 
 Para reconciliar vínculos produto-fornecedor, sinalizar ausência ou múltiplos fornecedores e configurar a regra de fornecedor principal, consulte [`docs/product-suppliers-sync.md`](docs/product-suppliers-sync.md).
 
+`runDailySync()` orquestra incremental, reconciliação, detalhes e normalização.
+Quando o orçamento seguro se encerra, o Apps Script agenda uma única continuação
+por `runDailySyncContinuation()`.
+
 Nunca envie ao GitHub:
 
 - `client_secret`;
@@ -129,6 +135,11 @@ Esse comando valida a estrutura, o manifesto e padrões comuns de vazamento de s
 - Detalhes e itens dos pedidos: PRA-18 / US-011 e PRA-51 / TT-011
 - Produtos e relações pai/filho: PRA-16 / US-012 e PRA-53 / TT-012
 - Vínculos produto-fornecedor: PRA-20 / US-013 e PRA-54 / TT-013
+- Camadas raw, staging, mart e logs: PRA-19 / US-014 e PRA-57 / TT-014
+- Sincronização incremental: PRA-21 / US-015 e PRA-56 / TT-015
+- Reconciliação histórica: PRA-22 / US-016 e PRA-55 / TT-016
+- Normalização de pedidos e itens: PRA-23 / US-017 e PRA-58 / TT-017
+- Hardening de consistência e retomada: PRA-83
 
 ## Referências oficiais
 

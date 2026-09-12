@@ -88,6 +88,16 @@ function createSyncContext({ pages = {}, pageSize = 2, maxPages = 100, maxPagesP
 
 async function loadJob(context) {
   vm.runInContext(
+    await readFile(path.join(root, 'src/core/ExecutionLease.gs'), 'utf8'),
+    context,
+    { filename: 'src/core/ExecutionLease.gs' }
+  );
+  vm.runInContext(
+    await readFile(path.join(root, 'src/core/RuntimeBudget.gs'), 'utf8'),
+    context,
+    { filename: 'src/core/RuntimeBudget.gs' }
+  );
+  vm.runInContext(
     await readFile(path.join(root, 'src/jobs/ProductSuppliersSyncJob.gs'), 'utf8'),
     context,
     { filename: 'src/jobs/ProductSuppliersSyncJob.gs' }
@@ -240,6 +250,11 @@ async function createStoreContext(productIds) {
     JSON
   });
   vm.runInContext(
+    await readFile(path.join(root, 'src/core/SheetWriter.gs'), 'utf8'),
+    context,
+    { filename: 'src/core/SheetWriter.gs' }
+  );
+  vm.runInContext(
     await readFile(path.join(root, 'src/repositories/ProductSupplierStore.gs'), 'utf8'),
     context,
     { filename: 'src/repositories/ProductSupplierStore.gs' }
@@ -296,4 +311,38 @@ test('regra configurável pode escolher o menor preço de compra como principal'
   assert.equal(String(row[3]), '7202');
   assert.equal(String(row[4]), '6202');
   assert.equal(row[5], 'lowest_purchase_price');
+});
+
+test('preço ausente não vence um preço válido na escolha do fornecedor principal', async () => {
+  const fixture = await createStoreContext([5301]);
+  vm.runInContext(`PRAProductSupplierStore.persistPage([
+    { id: 6301, produto: { id: 5301 }, fornecedor: { id: 7301 }, padrao: true },
+    { id: 6302, produto: { id: 5301 }, fornecedor: { id: 7302 }, precoCompra: 40, padrao: false }
+  ], { runId: 'supplier-c' })`, fixture.context);
+  vm.runInContext(
+    `PRAProductSupplierStore.finalizeRun('supplier-c', 'lowest_purchase_price')`,
+    fixture.context
+  );
+
+  const row = dataRows(fixture.spreadsheet.getSheetByName('product_supplier_status'))[0];
+  assert.equal(String(row[3]), '7302');
+  assert.equal(String(row[4]), '6302');
+});
+
+test('coleta de fornecedores salva checkpoint ao atingir orçamento de tempo', async () => {
+  const fixture = createSyncContext({ pages: { 1: { data: [{ id: 1 }] } } });
+  let clock = 0;
+  fixture.context.Date = class extends Date {
+    static now() { clock += 1000; return clock; }
+  };
+  await loadJob(fixture.context);
+
+  const result = vm.runInContext(
+    'PRAProductSuppliersSyncJob.run({ maxRuntimeMs: 1000, reserveMs: 0 })',
+    fixture.context
+  );
+  assert.equal(result.status, 'in_progress');
+  assert.equal(result.code, 'execution_budget_reached');
+  assert.equal(result.nextPage, 1);
+  assert.equal(fixture.calls.length, 0);
 });

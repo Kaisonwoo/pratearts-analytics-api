@@ -8,6 +8,16 @@ import process from 'node:process';
 const root = process.cwd();
 
 async function load(context, file) {
+  if (file === 'src/jobs/OrdersReconciliationJob.gs') {
+    const lease = await readFile(path.join(root, 'src/core/ExecutionLease.gs'), 'utf8');
+    vm.runInContext(lease, context, { filename: 'src/core/ExecutionLease.gs' });
+    const budget = await readFile(path.join(root, 'src/core/RuntimeBudget.gs'), 'utf8');
+    vm.runInContext(budget, context, { filename: 'src/core/RuntimeBudget.gs' });
+  }
+  if (file === 'src/repositories/RecalculationWindowStore.gs') {
+    const writer = await readFile(path.join(root, 'src/core/SheetWriter.gs'), 'utf8');
+    vm.runInContext(writer, context, { filename: 'src/core/SheetWriter.gs' });
+  }
   const code = await readFile(path.join(root, file), 'utf8');
   vm.runInContext(code, context, { filename: file });
 }
@@ -59,10 +69,10 @@ function jobFixture(options = {}) {
       }
     },
     PRARecalculationWindowStore: {
-      markWindow: (start, end, reason, runId) => {
+      stageWindow: (start, end, reason, runId) => {
         if (failMarker) throw new Error('marker unavailable');
         markers.push({ start, end, reason, runId });
-        return { ok: true, status: 'pending' };
+        return { ok: true, status: 'waiting_details' };
       }
     },
     PRALogger: { info() {}, warn() {}, error() {} },
@@ -93,7 +103,7 @@ function jobFixture(options = {}) {
   };
 }
 
-test('reconciliação usa janela configurável e marca intervalo afetado', async () => {
+test('reconciliação usa janela configurável e aguarda detalhes do intervalo afetado', async () => {
   const f = jobFixture({
     windowDays: 5,
     frequencyDays: 3,
@@ -188,7 +198,25 @@ test('falha no enfileiramento preserva a mesma página', async () => {
   assert.deepEqual(f.calls.map((call) => call.query.pagina), [1, 1]);
 });
 
-test('falha ao marcar recálculo retoma somente a fase final', async () => {
+test('reconciliação salva checkpoint ao atingir orçamento de tempo', async () => {
+  const f = jobFixture({ pages: { 1: { data: [{ id: 33 }] } } });
+  let clock = 0;
+  f.context.Date = class extends Date {
+    static now() { clock += 1000; return clock; }
+  };
+  await load(f.context, 'src/jobs/OrdersReconciliationJob.gs');
+
+  const result = vm.runInContext(
+    "PRAOrdersReconciliationJob.run({ today: '2026-09-11', maxRuntimeMs: 1000, reserveMs: 0, onPage: persist })",
+    f.context
+  );
+  assert.equal(result.status, 'in_progress');
+  assert.equal(result.code, 'execution_budget_reached');
+  assert.equal(result.nextPage, 1);
+  assert.equal(f.calls.length, 0);
+});
+
+test('falha ao preparar recálculo retoma somente a fase final', async () => {
   const f = jobFixture({ pages: { 1: { data: [{ id: 40 }] } } });
   await load(f.context, 'src/jobs/OrdersReconciliationJob.gs');
   f.failMarker(true);
@@ -197,7 +225,7 @@ test('falha ao marcar recálculo retoma somente a fase final', async () => {
     "PRAOrdersReconciliationJob.run({ today: '2026-09-11', onPage: persist })",
     f.context
   );
-  assert.equal(failed.code, 'recalc_mark_failed');
+  assert.equal(failed.code, 'recalc_stage_failed');
   assert.equal(JSON.parse(f.values.get('BLING_RECONCILIATION_CHECKPOINT')).phase, 'mark');
   assert.equal(f.calls.length, 1);
 
@@ -284,4 +312,28 @@ test('marcador de recálculo é idempotente para a mesma janela e motivo', async
   assert.equal(sheet.values[1][0], '2026-09-01:2026-09-11:historical_reconciliation');
   assert.equal(sheet.values[1][4], 'pending');
   assert.equal(sheet.values[1][6], 'run-b');
+});
+
+test('janela só muda de waiting_details para pending após ativação explícita', async () => {
+  const spreadsheet = spreadsheetMock();
+  const context = vm.createContext({
+    PRAConfig: {
+      KEYS: { DATA_SPREADSHEET_ID: 'DATA_SPREADSHEET_ID' },
+      requirePublicValue: () => 'sheet-id'
+    },
+    SpreadsheetApp: { openById: () => spreadsheet },
+    LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
+    Date, Object, String, JSON, Math, Number, Array
+  });
+  await load(context, 'src/repositories/RecalculationWindowStore.gs');
+
+  context.PRARecalculationWindowStore.stageWindow(
+    '2026-09-01', '2026-09-11', 'historical_reconciliation', 'run-stage'
+  );
+  const sheet = spreadsheet.sheets.get('recalc_windows');
+  assert.equal(sheet.values[1][4], 'waiting_details');
+
+  const result = context.PRARecalculationWindowStore.activateWaitingWindows();
+  assert.equal(result.activated, 1);
+  assert.equal(sheet.values[1][4], 'pending');
 });

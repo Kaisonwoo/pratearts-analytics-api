@@ -28,9 +28,15 @@ Ao concluir a última página, o checkpoint temporário é removido e um resumo 
 
 ## Entradas
 
-- `runDailySync()` executa a rotina incremental usando a fila padrão de detalhes.
+- `runDailySync()` executa o pipeline diário: incremental, reconciliação quando
+  devida, coleta de detalhes e normalização quando a fila fica vazia.
+- `runDailySyncContinuation()` é o handler interno usado para retomar o pipeline
+  sem criar gatilhos duplicados.
 - `runIncrementalOrdersSync(reset)` permite execução manual e reinício explícito do checkpoint.
 
-## Limites desta história
+## Orçamento e continuação
 
-Esta etapa implementa seleção incremental e checkpoint. Trigger automático, continuação agendada, processamento integral dos lotes e reconciliação histórica móvel pertencem às histórias posteriores.
+O pipeline compartilha o prazo definido por `BLING_EXECUTION_BUDGET_MS`. Se uma
+etapa atingir a margem segura ou se restarem lotes, um único gatilho temporário
+é agendado para `runDailySyncContinuation`. Ao concluir, gatilhos temporários
+remanescentes são removidos.

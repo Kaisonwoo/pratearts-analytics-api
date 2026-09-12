@@ -30,10 +30,6 @@ var PRADataLayerProvisioner = (function () {
       if (JSON.stringify(actual) !== JSON.stringify(headers)) {
         throw new Error('Cabeçalho incompatível na aba ' + name + '.');
       }
-      var existing = Math.max(sheet.getLastRow() - 1, 0);
-      if (existing > 0) {
-        sheet.getRange(2, 1, existing, headers.length).clearContent();
-      }
     }
 
     var rows = definitions.map(function (definition) {
@@ -45,9 +41,7 @@ var PRADataLayerProvisioner = (function () {
         PRADataLayerSchema.VERSION
       ];
     });
-    if (rows.length > 0) {
-      sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
-    }
+    PRASheetWriter.replaceRows(sheet, headers.length, rows);
     return rows.length;
   }
 

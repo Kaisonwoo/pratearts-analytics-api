@@ -100,6 +100,7 @@ test('provisionamento cria abas, registra metadados e é idempotente', () => {
     LockService: { getScriptLock: () => lock }
   };
   load('src/repositories/DataLayerSchema.gs', context);
+  load('src/core/SheetWriter.gs', context);
   load('src/repositories/DataLayerProvisioner.gs', context);
 
   const first = context.PRADataLayerProvisioner.run();
@@ -131,6 +132,7 @@ test('provisionamento rejeita cabeçalho incompatível sem sobrescrever dados', 
     }
   };
   load('src/repositories/DataLayerSchema.gs', context);
+  load('src/core/SheetWriter.gs', context);
   load('src/repositories/DataLayerProvisioner.gs', context);
   assert.throws(
     () => context.PRADataLayerProvisioner.run(),

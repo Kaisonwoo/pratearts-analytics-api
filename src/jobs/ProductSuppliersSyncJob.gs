@@ -55,6 +55,7 @@ var PRAProductSuppliersSyncJob = (function () {
     var policy = PRAConfig.getRequestPolicy();
     var pageSize = Number(options.pageSize || policy.pageSize);
     var maxPagesPerRun = Number(options.maxPagesPerRun || policy.maxPagesPerRun);
+    var executionBudgetMs = Number(options.maxRuntimeMs || policy.executionBudgetMs || 270000);
     var primaryRule = String(
       options.primaryRule ||
       PRAConfig.getPublicValue(
@@ -73,6 +74,13 @@ var PRAProductSuppliersSyncJob = (function () {
         {}
       );
     }
+    if (!Number.isInteger(executionBudgetMs) || executionBudgetMs < 1000 || executionBudgetMs > 330000) {
+      return failure_(
+        'execution_budget_invalid',
+        'O orcamento de execucao deve estar entre 1000 e 330000 ms.',
+        {}
+      );
+    }
     if (ALLOWED_PRIMARY_RULES.indexOf(primaryRule) < 0) {
       return failure_(
         'primary_supplier_rule_invalid',
@@ -86,6 +94,7 @@ var PRAProductSuppliersSyncJob = (function () {
       pageSize: pageSize,
       maxPages: policy.maxPages,
       maxPagesPerRun: maxPagesPerRun,
+      executionBudgetMs: executionBudgetMs,
       primaryRule: primaryRule,
       fingerprint: String(pageSize) + ':' + primaryRule
     };
@@ -189,13 +198,18 @@ var PRAProductSuppliersSyncJob = (function () {
     return completed;
   }
 
-  function run(options) {
+  function runUnlocked_(options) {
     options = options || {};
     var settings = validate_(options);
     if (!settings.ok) {
       PRALogger.warn('product_suppliers_sync_blocked', { code: settings.code });
       return settings;
     }
+    var budget = PRARuntimeBudget.create({
+      budgetMs: settings.executionBudgetMs,
+      deadlineAtMs: options.deadlineAtMs,
+      reserveMs: typeof options.reserveMs === 'undefined' ? 15000 : options.reserveMs
+    });
 
     var current = readJson_(PRAConfig.KEYS.BLING_PRODUCT_SUPPLIERS_SYNC_CHECKPOINT);
     if (options.reset) {
@@ -215,6 +229,10 @@ var PRAProductSuppliersSyncJob = (function () {
 
     var pagesThisRun = 0;
     while (pagesThisRun < settings.maxPagesPerRun) {
+      if (budget.shouldYield()) {
+        saveCheckpoint_(current);
+        return publicSummary_('in_progress', 'execution_budget_reached', current);
+      }
       if (current.pagesFetched >= settings.maxPages) {
         return failure_(
           'page_limit_reached',
@@ -292,6 +310,9 @@ var PRAProductSuppliersSyncJob = (function () {
       if (pageResult.data.length < current.pageSize) {
         current.phase = 'reconcile';
         saveCheckpoint_(current);
+        if (budget.shouldYield()) {
+          return publicSummary_('in_progress', 'execution_budget_reached', current);
+        }
         return reconcile_(current);
       }
 
@@ -311,6 +332,22 @@ var PRAProductSuppliersSyncJob = (function () {
       primaryRule: current.primaryRule
     });
     return inProgress;
+  }
+
+  function run(options) {
+    var lease = PRAExecutionLease.acquire('product_suppliers_sync');
+    if (!lease.acquired) {
+      return failure_(
+        'execution_in_progress',
+        'Ja existe uma sincronizacao de fornecedores em andamento.',
+        { retryAfter: new Date(lease.expiresAt).toISOString() }
+      );
+    }
+    try {
+      return runUnlocked_(options);
+    } finally {
+      PRAExecutionLease.release(lease);
+    }
   }
 
   return Object.freeze({

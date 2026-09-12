@@ -34,9 +34,20 @@
 | `BLING_STATUS_ATENDIDO_ID` | Antes da coleta | Não | ID técnico da situação válida de venda. |
 | `DATA_SPREADSHEET_ID` | Antes da persistência | Não | Identifica a base de dados do MVP. |
 | `BLING_MAX_ORDER_DETAILS_PER_RUN` | Antes da coleta de detalhes | Não | Limita pedidos detalhados por execução; padrão 20, máximo 100. |
+| `BLING_EXECUTION_BUDGET_MS` | Não | Não | Orçamento compartilhado por execução, de 60000 a 330000 ms; padrão: `270000`. |
 | `BLING_ORDER_DETAILS_QUEUE_INDEX` | Gerenciada | Não | Índice interno da fila fragmentada; contém somente contagens e chaves técnicas. |
 | `SYNC_TIMEZONE` | Não | Não | Padrão: `America/Sao_Paulo`. |
 | `SYNC_HOUR` | Não | Não | Inteiro entre 0 e 23; padrão: `6`. |
+
+O orçamento padrão encerra cada etapa com margem antes do limite do Apps Script.
+Quando ainda há páginas ou pedidos pendentes, o checkpoint é preservado e um
+único gatilho de continuação é programado. Esse fluxo usa o escopo
+`script.scriptapp` declarado no manifesto.
+
+Os jobs incremental, reconciliação, fornecedores e detalhes usam leases curtos
+em Script Properties. Uma segunda execução do mesmo job retorna
+`execution_in_progress`; o lease expira automaticamente caso uma execução seja
+interrompida pelo limite da plataforma.
 
 ## Cadastro manual
 
