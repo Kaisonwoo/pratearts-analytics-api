@@ -47,7 +47,7 @@ function runDailySync() {
  * @return {Object} Resumo operacional seguro da continuacao.
  */
 function runDailySyncContinuation() {
-  return PRADailySyncJob.run();
+  return PRADailySyncJob.run({ replaceContinuation: true });
 }
 
 /**

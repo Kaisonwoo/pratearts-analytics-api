@@ -31,7 +31,7 @@ A persistência durante a coleta é idempotente por `link_id`. A reconciliação
 
 ## Sinalização por produto
 
-A aba `product_supplier_status` é reconstruída ao final da reconciliação para todos os produtos conhecidos em `raw_products` e para qualquer produto encontrado nos vínculos atuais.
+A aba `stg_product_suppliers` é reconstruída ao final da reconciliação para todos os produtos conhecidos em `raw_products` e para qualquer produto encontrado nos vínculos atuais.
 
 Cada produto recebe um dos estados:
 
@@ -39,7 +39,13 @@ Cada produto recebe um dos estados:
 - `single`: exatamente um fornecedor distinto;
 - `multiple`: dois ou mais fornecedores distintos.
 
-Também são registrados `supplier_count`, `primary_supplier_id`, `primary_link_id`, a regra utilizada, `updated_at` e `run_id`.
+Também são registrados `supplier_count`, `supplier_id`, `supplier_link_id`, a
+regra utilizada, `source_updated_at`, `processed_at` e `run_id`.
+
+Vínculos sem ID técnico válido de vínculo, produto ou fornecedor não bloqueiam a
+página inteira. Os demais vínculos são confirmados e cada registro rejeitado é
+sinalizado de forma idempotente em `data_quality_errors`, sem expor o conteúdo
+comercial nos logs. O resumo operacional informa apenas `linksRejected`.
 
 ## Regra de fornecedor principal
 

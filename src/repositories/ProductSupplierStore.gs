@@ -3,15 +3,20 @@ var PRAProductSupplierStore = (function () {
 
   var LOCK_TIMEOUT_MS = 30000;
   var LINK_SHEET_NAME = 'raw_product_suppliers';
-  var STATUS_SHEET_NAME = 'product_supplier_status';
+  var STATUS_SHEET_NAME = 'stg_product_suppliers';
+  var QUALITY_SHEET_NAME = 'data_quality_errors';
   var PRODUCT_SHEET_NAME = 'raw_products';
   var LINK_HEADERS = Object.freeze([
     'link_id', 'product_id', 'supplier_id', 'description', 'supplier_sku',
     'cost_price', 'purchase_price', 'is_default', 'updated_at', 'run_id'
   ]);
   var STATUS_HEADERS = Object.freeze([
-    'product_id', 'supplier_count', 'link_state', 'primary_supplier_id',
-    'primary_link_id', 'primary_rule', 'updated_at', 'run_id'
+    'product_id', 'supplier_count', 'link_state', 'supplier_id',
+    'supplier_link_id', 'supplier_rule', 'source_updated_at', 'processed_at', 'run_id'
+  ]);
+  var QUALITY_HEADERS = Object.freeze([
+    'error_key', 'entity_type', 'entity_key', 'error_code',
+    'severity', 'detected_at', 'resolved_at', 'run_id'
   ]);
   var ALLOWED_PRIMARY_RULES = Object.freeze([
     'marked_default',
@@ -97,14 +102,53 @@ var PRAProductSupplierStore = (function () {
     ];
   }
 
+  function validationErrorCode_(error) {
+    var message = String(error && error.message || '');
+    if (message.indexOf('ID do vínculo') >= 0) return 'invalid_link_id';
+    if (message.indexOf('ID do produto') >= 0) return 'invalid_product_id';
+    if (message.indexOf('ID do fornecedor') >= 0) return 'invalid_supplier_id';
+    return 'invalid_product_supplier_link';
+  }
+
+  function validIdOrBlank_(value) {
+    var candidate = String(value || '');
+    return /^\d+$/.test(candidate) && Number(candidate) > 0 ? candidate : '';
+  }
+
+  function qualityRow_(link, metadata, position, error, timestamp) {
+    var linkId = validIdOrBlank_(link && link.id);
+    var entityKey = linkId || [
+      String(metadata.runId || 'unknown-run'),
+      String(metadata.page || 'unknown-page'),
+      String(position + 1)
+    ].join(':');
+    var errorCode = validationErrorCode_(error);
+    return [
+      ['product_supplier_link', entityKey, errorCode].join(':'),
+      'product_supplier_link',
+      entityKey,
+      errorCode,
+      'error',
+      timestamp,
+      '',
+      String(metadata.runId || '')
+    ];
+  }
+
   function persistPage(links, metadata) {
     if (!Array.isArray(links)) {
       throw new Error('A página de vínculos deve ser uma lista.');
     }
     metadata = metadata || {};
     var timestamp = new Date().toISOString();
-    var incoming = links.map(function (link) {
-      return linkRow_(link, metadata, timestamp);
+    var incoming = [];
+    var qualityRows = [];
+    links.forEach(function (link, position) {
+      try {
+        incoming.push(linkRow_(link, metadata, timestamp));
+      } catch (error) {
+        qualityRows.push(qualityRow_(link, metadata, position, error, timestamp));
+      }
     });
     var spreadsheetId = PRAConfig.requirePublicValue(PRAConfig.KEYS.DATA_SPREADSHEET_ID);
     var lock = LockService.getScriptLock();
@@ -113,10 +157,24 @@ var PRAProductSupplierStore = (function () {
       var spreadsheet = SpreadsheetApp.openById(spreadsheetId);
       var sheet = ensureSheet_(spreadsheet, LINK_SHEET_NAME, LINK_HEADERS);
       var merged = mergeByLinkId_(readRows_(sheet, LINK_HEADERS.length), incoming);
-      PRASheetWriter.replaceRows(sheet, LINK_HEADERS.length, merged);
+      var operations = [{ sheet: sheet, width: LINK_HEADERS.length, rows: merged }];
+      if (qualityRows.length > 0) {
+        var qualitySheet = ensureSheet_(spreadsheet, QUALITY_SHEET_NAME, QUALITY_HEADERS);
+        var mergedQuality = mergeByLinkId_(
+          readRows_(qualitySheet, QUALITY_HEADERS.length),
+          qualityRows
+        );
+        operations.push({
+          sheet: qualitySheet,
+          width: QUALITY_HEADERS.length,
+          rows: mergedQuality
+        });
+      }
+      PRASheetWriter.replaceMany(operations);
       return {
         ok: true,
         linksStored: incoming.length,
+        linksRejected: qualityRows.length,
         updatedAt: timestamp
       };
     } finally {
@@ -236,6 +294,7 @@ var PRAProductSupplierStore = (function () {
           primary ? String(primary[2]) : '',
           primary ? String(primary[0]) : '',
           selectedRule,
+          timestamp,
           timestamp,
           targetRunId
         ];

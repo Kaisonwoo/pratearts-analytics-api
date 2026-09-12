@@ -29,19 +29,29 @@ var PRAContinuationScheduler = (function () {
     });
   }
 
-  function schedule(handler, delayMs) {
+  function schedule(handler, delayMs, options) {
     var name = validateHandler_(handler);
     var delay = Number(delayMs || DEFAULT_DELAY_MS);
+    options = options || {};
     if (!Number.isInteger(delay) || delay < 60000 || delay > 3600000) {
       throw new Error('A continuacao deve ser agendada entre 1 e 60 minutos.');
     }
     return withLock_(function () {
       var existing = matching_(name);
-      if (existing.length > 0) {
+      if (existing.length > 0 && !options.replaceExisting) {
         return { ok: true, scheduled: false, existing: true, handler: name };
       }
+      if (options.replaceExisting) {
+        existing.forEach(function (trigger) { ScriptApp.deleteTrigger(trigger); });
+      }
       ScriptApp.newTrigger(name).timeBased().after(delay).create();
-      return { ok: true, scheduled: true, existing: false, handler: name };
+      return {
+        ok: true,
+        scheduled: true,
+        existing: false,
+        replaced: options.replaceExisting ? existing.length : 0,
+        handler: name
+      };
     });
   }
 
