@@ -11,6 +11,7 @@
     "test": "node --test",
     "validate": "node scripts/validate-project.mjs",
     "check": "npm run validate && npm test",
+    "build:runtime": "node scripts/build-apps-script.mjs",
     "clasp:login": "clasp login",
     "clasp:open": "clasp open",
     "clasp:pull": "clasp pull",

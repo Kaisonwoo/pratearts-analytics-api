@@ -12,6 +12,7 @@ var PRADataLayerSchema = (function () {
     ['staging','stg_product_suppliers','product_id',['product_id','supplier_count','link_state','supplier_id','supplier_link_id','supplier_rule','source_updated_at','processed_at','run_id']],
     ['mart','mart_kpis','period_key',['period_key','period_start','period_end','valid_orders','items_quantity','revenue','average_ticket','calculated_at','run_id']],
     ['mart','mart_product_sales','mart_key',['mart_key','period_key','product_id','parent_product_id','sku','supplier_id','quantity','revenue','orders_count','calculated_at','run_id']],
+    ['logs','mart_period_state','period_key',['period_key','source_hash','output_hash','calculated_at','run_id']],
     ['logs','sync_runs','run_id',['run_id','job_name','status','started_at','finished_at','duration_ms','pages_processed','records_processed','error_code','correlation_id']],
     ['logs','data_quality_errors','error_key',['error_key','entity_type','entity_key','error_code','severity','detected_at','resolved_at','run_id']],
     ['logs','order_detail_errors','order_id',['order_id','error_code','status_code','correlation_id','attempts','last_attempt_at','run_id','resolved_at']],
@@ -32,7 +33,7 @@ var PRADataLayerSchema = (function () {
   }
 
   return Object.freeze({
-    VERSION: '2',
+    VERSION: '3',
     METADATA_SHEET: '_schema_registry',
     METADATA_HEADERS: Object.freeze(['sheet_name','layer','primary_key','column_count','schema_version']),
     list: list,

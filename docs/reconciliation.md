@@ -50,7 +50,9 @@ O estado muda de `waiting_details` para `pending` somente depois que
 erros de detalhe sem resolução. Assim, consumidores de mart não recalculam uma
 janela contra dados raw antigos.
 
-A Sprint 3 poderá consumir esses marcadores para recalcular somente os indicadores afetados.
+`PRAMartsJob` consome esses marcadores e os conclui somente depois da gravação
+e confirmação dos períodos afetados. Veja [marts.md](marts.md) para limites de
+atomicidade, hashes de recuperação e procedimento de homologação.
 
 ## Execução manual
 
