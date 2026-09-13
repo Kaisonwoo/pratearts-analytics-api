@@ -99,16 +99,27 @@ var PRADailySyncJob = (function () {
       });
     }
 
+    var marts = null;
+    if (normalization && normalization.ok && normalization.status === 'completed' && !budget.shouldYield()) {
+      marts = PRAMartsJob.run({
+        maxRuntimeMs: executionBudgetMs,
+        deadlineAtMs: budget.deadlineAtMs,
+        reserveMs: Math.min(executionBudgetMs - 1, Math.max(30000, budget.reserveMs)),
+        scheduleContinuation: false
+      });
+    }
+
     var qualityBlocked = Boolean(details && queue.pending === 0 && unresolvedErrors > 0);
     var blocked = !incremental || !incremental.ok ||
       (reconciliation && !reconciliation.ok) ||
       (details && !details.ok) ||
-      (normalization && !normalization.ok) || qualityBlocked;
+      (normalization && !normalization.ok) || (marts && !marts.ok) || qualityBlocked;
     var inProgress = !blocked && (
       incremental.status === 'in_progress' ||
       (reconciliation && reconciliation.status === 'in_progress') ||
       queue.pending > 0 ||
-      !normalization || normalization.status === 'in_progress'
+      !normalization || normalization.status === 'in_progress' ||
+      !marts || marts.status === 'in_progress'
     );
     var retryableBlocked = retryableBlocked_(incremental) ||
       retryableBlocked_(reconciliation) || retryableBlocked_(details);
@@ -126,6 +137,7 @@ var PRADailySyncJob = (function () {
       reconciliation: reconciliation,
       details: details,
       normalization: normalization,
+      marts: marts,
       pending: Number(queue.pending || 0),
       continuationScheduled: Boolean(continuation.scheduled),
       updatedAt: new Date().toISOString()

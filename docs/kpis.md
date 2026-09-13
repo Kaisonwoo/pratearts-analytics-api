@@ -36,7 +36,9 @@ O `PRATransformService` calcula `stg_order_items.item_revenue` durante a constru
 
 Entradas incompatíveis deixam `item_revenue` vazio e geram `invalid_item_revenue_inputs` em `data_quality_errors`, sem registrar SKU, preço, desconto ou outro valor comercial nos logs. Enquanto houver qualquer erro desse tipo, o pipeline retorna `item_revenue_quality_blocked` e não libera a classificação para consumo analítico.
 
-O `PRAKpiService.calculateMetrics()` é uma função pura e sem acesso à planilha. Ela será reutilizada pela construção incremental de `mart_kpis` em PRA-30 / PRA-63.
+O `PRAKpiService.calculateMetrics()` é uma função pura e sem acesso à planilha.
+Ela é reutilizada pela construção incremental de `mart_kpis` em PRA-30/PRA-63.
+Veja [marts.md](marts.md) para granularidade, agrupamento e reconciliação.
 
 ## Encadeamento operacional
 
@@ -45,6 +47,8 @@ O `PRAKpiService.calculateMetrics()` é uma função pura e sem acesso à planil
 1. normalização técnica e cálculo do faturamento por item;
 2. classificação de venda válida pela situação Atendido.
 
-O mesmo orquestrador é usado por `runOrdersNormalization()` e pelo estágio final de `runDailySync()`, evitando que o job diário deixe `is_valid_sale` sem atualização.
+O mesmo orquestrador é usado por `runOrdersNormalization()` e pelo estágio
+analítico de `runDailySync()`, evitando que o job diário deixe `is_valid_sale`
+sem atualização. O fluxo diário chama os marts após esse estágio concluir.
 
 Os retornos e logs operacionais contêm somente contagens, estados e identificadores de execução. Os valores calculados permanecem nas camadas de dados destinadas à análise.

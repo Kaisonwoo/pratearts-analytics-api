@@ -32,13 +32,19 @@ Separar dados de origem, dados tratados, indicadores e controles operacionais pa
 | logs | `data_quality_errors` | `error_key` |
 | logs | `order_detail_errors` | `order_id` |
 | logs | `recalc_windows` | `recalc_key` |
+| logs | `mart_period_state` | `period_key` |
 
 ## Provisionamento
 
 Execute `provisionDataLayers()` uma vez após configurar `DATA_SPREADSHEET_ID`. A rotina pode ser executada novamente: abas compatíveis são apenas validadas, abas ausentes são criadas e o registro de esquema é reconstruído.
 
+O esquema 3 de PRA-30/PRA-63 acrescenta o estado de integridade dos marts por
+período. Há 15 abas de dados/controle e `_schema_registry` (16 ao todo).
+Reexecute o provisionamento antes da primeira construção dos marts.
+
 Se uma aba já existente tiver cabeçalho incompatível, a rotina falha sem substituir os dados. Isso evita que uma mudança de versão altere silenciosamente dados já persistidos.
 
 ## Limites desta história
 
-Esta história cria os contratos e a infraestrutura das quatro camadas. Transformações, regra de venda válida, atribuição analítica, KPIs e construção incremental dos marts pertencem às histórias posteriores.
+O provisionamento cria contratos e infraestrutura. A construção incremental
+e as regras de leitura dos marts estão descritas em [marts.md](marts.md).

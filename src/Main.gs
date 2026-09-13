@@ -129,6 +129,16 @@ function runValidSalesClassification() {
   return PRAValidSalesService.run();
 }
 
+/** Constrói ou retoma os marts a partir do staging já normalizado. */
+function runMartsBuild() {
+  return PRAMartsJob.run();
+}
+
+/** Continua a construção incremental com um único gatilho temporário. */
+function runMartsContinuation() {
+  return PRAMartsJob.run({ replaceContinuation: true });
+}
+
 /**
  * Executa ou retoma a reconciliação completa do catálogo de produtos.
  * Persiste IDs, SKUs e relações pai/filho sem expor o catálogo nos logs.

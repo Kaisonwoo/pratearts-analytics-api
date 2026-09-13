@@ -7,8 +7,9 @@ Integração analítica para transformar dados operacionais do Bling em relatór
 Os Sprints 0, 1 e 2 foram concluídos. O projeto está no Sprint 3 — Transformação
 e regras de negócio. A `main` contém normalização, classificação de venda válida,
 reconciliação de fornecedores e hardening para consistência e retomada segura.
-O cálculo unificado de faturamento, quantidade e ticket médio está em desenvolvimento
-em PRA-25 / PRA-65.
+O cálculo unificado de faturamento, quantidade e ticket médio de PRA-25 / PRA-65
+foi integrado e homologado. O incremento PRA-30 / PRA-63 implementa os marts
+diários e aguarda integração e homologação no ambiente real.
 
 ## Decisões do MVP
 
@@ -105,9 +106,14 @@ Para reconciliar vínculos produto-fornecedor, sinalizar ausência ou múltiplos
 Para consultar as fórmulas de faturamento por item, quantidade e ticket médio, consulte [`docs/kpis.md`](docs/kpis.md).
 
 `runDailySync()` orquestra incremental, reconciliação, detalhes e o pipeline
-analítico de normalização, faturamento por item e classificação de venda válida.
+analítico de normalização, faturamento por item, classificação de venda válida
+e construção incremental dos marts.
 Quando o orçamento seguro se encerra, o Apps Script agenda uma única continuação
 por `runDailySyncContinuation()`.
+
+O contrato de agrupamento, recuperação e implantação dos marts está em
+[`docs/marts.md`](docs/marts.md). Para gerar o runtime completo e rastreável,
+use `npm run build:runtime -- /caminho/temporario/runtime`.
 
 Nunca envie ao GitHub:
 
@@ -148,6 +154,7 @@ Esse comando valida a estrutura, o manifesto e padrões comuns de vazamento de s
 - Hardening de consistência e retomada: PRA-83
 - Persistência segura de vínculos produto-fornecedor: PRA-84
 - Faturamento, quantidade e ticket médio: PRA-25 / US-021 e PRA-65 / TT-021
+- Marts analíticos incrementais: PRA-30 / US-022 e PRA-63 / TT-022
 
 ## Referências oficiais
 

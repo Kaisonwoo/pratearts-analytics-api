@@ -200,7 +200,7 @@ test('incremental salva checkpoint ao atingir orçamento de tempo', async () => 
   assert.equal(f.calls.length, 0);
 });
 
-test('DailySync orquestra incremental, detalhes e normalizacao', async () => {
+test('DailySync orquestra incremental, detalhes, normalizacao e marts', async () => {
   const queued = [];
   const context = vm.createContext({
     PRAConfig: {
@@ -225,6 +225,9 @@ test('DailySync orquestra incremental, detalhes e normalizacao', async () => {
     PRAOrdersAnalyticsPipeline: {
       run: () => ({ ok: true, status: 'completed', code: 'orders_analytics_completed' })
     },
+    PRAMartsJob: {
+      run: () => ({ ok: true, status: 'completed', code: 'marts_completed' })
+    },
     PRALogger: { info: () => {} },
     Date,
     Number,
@@ -244,10 +247,51 @@ test('DailySync orquestra incremental, detalhes e normalizacao', async () => {
     context
   );
   assert.equal(result.status, 'completed');
+  assert.equal(result.marts.status, 'completed');
   assert.equal(queued.length, 1);
   assert.equal(queued[0].page, 2);
   assert.equal(queued[0].metadata.runId, 'daily-run');
 });
+
+for (const martStatus of ['completed', 'in_progress', 'blocked']) {
+  test(`DailySync respeita resultado ${martStatus} dos marts e compartilha prazo`, async () => {
+    const calls = [], schedules = [];
+    const context = vm.createContext({
+      PRAConfig: { getRequestPolicy: () => ({ executionBudgetMs: 270000 }) },
+      PRAOrdersIncrementalSync: { run: options => {
+        calls.push(['incremental', options]); return { ok: true, status: 'completed' };
+      } },
+      PRAOrderDetailsQueue: { getSummary: () => ({ pending: 0 }) },
+      PRAOrderDetailsJob: { run: options => {
+        calls.push(['details', options]); return { ok: true, status: 'completed', unresolvedErrors: 0 };
+      } },
+      PRAOrdersAnalyticsPipeline: { run: options => {
+        calls.push(['normalization', options]); return { ok: true, status: 'completed' };
+      } },
+      PRAMartsJob: { run: options => {
+        calls.push(['marts', options]);
+        // Real budget validation also guards custom short execution limits.
+        context.PRARuntimeBudget.create({ budgetMs: options.maxRuntimeMs,
+          deadlineAtMs: options.deadlineAtMs, reserveMs: options.reserveMs });
+        return { ok: martStatus !== 'blocked', status: martStatus };
+      } },
+      PRAContinuationScheduler: {
+        schedule: handler => { schedules.push(handler); return { ok: true, scheduled: true }; },
+        cancel: () => ({ ok: true, scheduled: false })
+      },
+      PRALogger: { info() {}, error() {} }
+    });
+    vm.runInContext(await readFile(path.join(root, 'src/core/RuntimeBudget.gs'), 'utf8'), context);
+    await load(context, 'DailySyncJob.gs');
+    const result = context.PRADailySyncJob.run({ maxRuntimeMs: 10000, reserveMs: 0 });
+    assert.equal(result.status, martStatus);
+    assert.equal(result.ok, martStatus !== 'blocked');
+    assert.deepEqual(calls.map(call => call[0]), ['incremental', 'details', 'normalization', 'marts']);
+    assert.equal(new Set(calls.map(call => call[1].deadlineAtMs)).size, 1);
+    assert.equal(calls.at(-1)[1].scheduleContinuation, false);
+    assert.deepEqual(schedules, martStatus === 'in_progress' ? ['runDailySyncContinuation'] : []);
+  });
+}
 
 test('DailySync bloqueia normalização quando existem erros de detalhe não resolvidos', async () => {
   let normalizationCalls = 0;

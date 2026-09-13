@@ -26,6 +26,8 @@ const requiredFiles = [
   'docs/normalization.md',
   'docs/valid-sales.md',
   'docs/kpis.md',
+  'docs/marts.md',
+  'scripts/build-apps-script.mjs',
   'docs/samples/bling/product-detail-with-variations.json',
   'docs/samples/bling/product-list.json',
   'docs/samples/bling/product-supplier-list.json',
@@ -46,6 +48,7 @@ const requiredFiles = [
   'src/core/SheetWriter.gs',
   'src/core/Logger.gs',
   'src/jobs/DailySyncJob.gs',
+  'src/jobs/MartsJob.gs',
   'src/jobs/OrderDetailsJob.gs',
   'src/jobs/OrderDetailsQueue.gs',
   'src/jobs/OrdersInitialLoadJob.gs',
@@ -64,6 +67,7 @@ const requiredFiles = [
   'src/services/TransformService.gs',
   'src/services/ValidSalesService.gs',
   'src/services/KpiService.gs',
+  'src/services/MartService.gs',
   'src/services/OrdersAnalyticsPipeline.gs'
 ];
 

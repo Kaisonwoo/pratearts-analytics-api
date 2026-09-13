@@ -58,7 +58,11 @@ por seu próprio ID.
 
 Pedidos e itens detalhados passam pelo `PRAOrdersAnalyticsPipeline`. O estágio
 calcula o faturamento por item sem frete, usando o desconto percentual do item,
-e reaplica a situação Atendido antes de liberar os dados para os futuros marts.
+e reaplica a situação Atendido antes de liberar os dados para `PRAMartsJob`.
+Esse job prepara produtos e agrega dias alterados em `mart_kpis` e
+`mart_product_sales`, confirmando integridade em `mart_period_state` e
+concluindo as janelas de recálculo. O contrato das visões de produto/família,
+fornecedor atual e recuperação está em [marts.md](marts.md).
 
 ## Princípios
 
