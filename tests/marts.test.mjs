@@ -6,6 +6,21 @@ import vm from 'node:vm';
 
 const copy = value => JSON.parse(JSON.stringify(value));
 const stamp = '2026-09-12T00:00:00.000Z';
+async function realScheduler(f) {
+  const triggers = [];
+  let fail = false;
+  f.context.LockService = { getScriptLock: () => ({ tryLock: () => true, waitLock() {}, releaseLock() {} }) };
+  f.context.ScriptApp = {
+    getProjectTriggers: () => triggers.slice(),
+    newTrigger: handler => ({ timeBased() { return this; }, after() { return this; }, create() {
+      if (fail) throw new Error('PRIVATE synthetic trigger failure');
+      triggers.push({ getHandlerFunction: () => handler });
+    } }),
+    deleteTrigger: trigger => triggers.splice(triggers.indexOf(trigger), 1)
+  };
+  vm.runInContext(await readFile('src/core/ContinuationScheduler.gs', 'utf8'), f.context);
+  return { triggers, failCreation: () => { fail = true; } };
+}
 async function fixture() {
   const sheets = new Map(), props = new Map(), logs = [], scheduled = new Set();
   let writes = 0, busy = false, now = 1000000, uuid = 0;
@@ -112,6 +127,37 @@ async function fixture() {
   return { context, sheets, props, logs, scheduled, seed, read, orders, items, baseOrders, baseItems, run,
     writes: () => writes, busy: value => { busy = value; }, advance: value => { now += value; } };
 }
+
+test('marts: agendador real retoma o lote, deduplica e cancela somente seu gatilho', async () => {
+  const f = await fixture(); const scheduler = await realScheduler(f);
+  f.context.PRAContinuationScheduler.schedule('runDailySyncContinuation', 60000);
+  const first = f.run({ scheduleContinuation: true, maxPeriodsPerRun: 1 });
+  assert.equal(first.status, 'in_progress');
+  assert.equal(first.periodsWritten, 1);
+  assert.equal(first.continuationScheduled, true);
+  assert.equal(f.context.PRAContinuationScheduler.schedule('runMartsContinuation', 60000).existing, true);
+  assert.equal(scheduler.triggers.length, 2);
+  const resumed = f.run({ scheduleContinuation: true, maxPeriodsPerRun: 1, replaceContinuation: true });
+  assert.equal(resumed.status, 'completed');
+  assert.equal(resumed.periodsWritten, 1);
+  assert.deepEqual(scheduler.triggers.map(t => t.getHandlerFunction()), ['runDailySyncContinuation']);
+  assert.equal(f.run({ scheduleContinuation: true }).periodsWritten, 0);
+  assert.throws(() => f.context.PRAContinuationScheduler.schedule('unknownHandler', 60000));
+});
+
+test('marts: falha do gatilho mantém progresso persistido e retoma sem duplicação', async () => {
+  const f = await fixture(); const scheduler = await realScheduler(f); scheduler.failCreation();
+  const failed = f.run({ scheduleContinuation: true, maxPeriodsPerRun: 1 });
+  assert.equal(failed.code, 'mart_continuation_failed');
+  assert.equal(failed.periodsWritten, 1);
+  assert.equal(failed.periodsRemaining, 1);
+  assert.equal(f.read('mart_period_state').length, 1);
+  assert.ok(!JSON.stringify(f.logs).includes('PRIVATE'));
+  const resumed = f.run({ scheduleContinuation: true });
+  assert.equal(resumed.status, 'completed');
+  assert.equal(resumed.periodsWritten, 1);
+  assert.equal(f.read('mart_period_state').length, 2);
+});
 
 test('marts: KPI diário, devolução, desconto e pedidos distintos por família', async () => {
   const f = await fixture(); const r = f.run();

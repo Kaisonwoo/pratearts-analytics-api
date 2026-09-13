@@ -1,7 +1,7 @@
 var PRAContinuationScheduler = (function () {
   'use strict';
 
-  var ALLOWED_HANDLERS = Object.freeze(['runDailySyncContinuation']);
+  var ALLOWED_HANDLERS = Object.freeze(['runDailySyncContinuation', 'runMartsContinuation']);
   var DEFAULT_DELAY_MS = 60000;
   var LOCK_TIMEOUT_MS = 30000;
 
