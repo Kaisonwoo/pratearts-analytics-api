@@ -213,7 +213,15 @@ var PRAMartsJob = (function () {
           ? PRAContinuationScheduler.schedule(HANDLER, 60000, { replaceExisting: Boolean(options.replaceContinuation) })
           : PRAContinuationScheduler.cancel(HANDLER);
         summary.continuationScheduled = Boolean(scheduled.scheduled);
-      } catch (error) { summary = result('blocked', 'mart_continuation_failed'); }
+      } catch (error) {
+        // Scheduling follows persistence: keep committed counts and any earlier
+        // blocker instead of reporting that no periods were written.
+        if (summary.status !== 'blocked') summary.code = 'mart_continuation_failed';
+        summary.ok = false;
+        summary.status = 'blocked';
+        summary.continuationScheduled = false;
+        summary.continuationCode = 'mart_continuation_failed';
+      }
     }
     PRALogger.info('marts_finished', summary);
     return summary;

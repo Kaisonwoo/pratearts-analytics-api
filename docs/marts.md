@@ -74,6 +74,12 @@ de 1 a 366 dias. Um lock serializa leitura, cálculo e escrita. Quando necessár
 `runMartsContinuation()` agenda uma única continuação; no fluxo diário, esse
 papel fica exclusivamente com `runDailySyncContinuation()`.
 
+O agendador compartilhado permite explicitamente os dois handlers e mantém
+deduplicação e cancelamento isolados por nome. Falhas de agendamento preservam
+no resumo os períodos já gravados e o bloqueio original, quando existente;
+a retomada usa os hashes persistidos e não exige limpar ou reiniciar a base.
+O teste de integração carrega o agendador real, incluindo a falha após a escrita.
+
 O recálculo é incremental **por período**, mas a implementação atual ainda lê
 as tabelas completas e grava em lote a fotografia completa de cada destino
 alterado, preservando os valores dos períodos intactos. O custo físico cresce
