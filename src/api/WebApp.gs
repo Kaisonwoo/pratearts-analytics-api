@@ -43,8 +43,57 @@ function renderAuthorizationCallback_(parameters) {
   );
 }
 
+function renderDashboardPage_() {
+  return HtmlService.createHtmlOutputFromFile('Index')
+    .setTitle('Pratearts Analytics')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+function apiEnvelope_(data, resource) {
+  return {
+    data: data,
+    meta: {
+      contractVersion: '1.0',
+      generatedAt: new Date().toISOString(),
+      source: 'runtime'
+    },
+    filtersApplied: { resource: resource },
+    errors: []
+  };
+}
+
+function jsonOutput_(payload) {
+  return ContentService
+    .createTextOutput(JSON.stringify(payload))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function routeApiRequest_(parameters) {
+  var resource = String(parameters.resource || '').toLowerCase();
+  if (resource === 'health') {
+    return apiEnvelope_(PRAHealthService.getStatus(), resource);
+  }
+  if (resource === 'dashboard') {
+    return PRAReportService.execute(parameters);
+  }
+  return {
+    data: null,
+    meta: {
+      contractVersion: '1.0',
+      generatedAt: new Date().toISOString(),
+      source: 'runtime'
+    },
+    filtersApplied: { resource: resource || null },
+    errors: [{
+      code: 'report_unknown_resource',
+      message: 'O recurso solicitado não existe.'
+    }]
+  };
+}
+
 /**
- * Endpoint de saúde e entrada do OAuth. Nenhuma resposta retorna segredos.
+ * Entrada do OAuth, dashboard e API de relatórios.
+ * Sem resource ou view, preserva o endpoint de saúde legado.
  * @param {Object} event Evento HTTP do Apps Script.
  * @return {GoogleAppsScript.Content.TextOutput|GoogleAppsScript.HTML.HtmlOutput}
  */
@@ -56,7 +105,11 @@ function doGet(event) {
   if (parameters.code || parameters.error || parameters.state) {
     return renderAuthorizationCallback_(parameters);
   }
-  return ContentService
-    .createTextOutput(JSON.stringify(PRAHealthService.getStatus()))
-    .setMimeType(ContentService.MimeType.JSON);
+  if (parameters.view === 'dashboard') {
+    return renderDashboardPage_();
+  }
+  if (parameters.resource) {
+    return jsonOutput_(routeApiRequest_(parameters));
+  }
+  return jsonOutput_(PRAHealthService.getStatus());
 }
