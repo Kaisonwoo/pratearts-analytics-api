@@ -4,12 +4,11 @@ Integração analítica para transformar dados operacionais do Bling em relatór
 
 ## Estado atual
 
-Os Sprints 0, 1 e 2 foram concluídos. O projeto está no Sprint 3 — Transformação
-e regras de negócio. A `main` contém normalização, classificação de venda válida,
-reconciliação de fornecedores e hardening para consistência e retomada segura.
-O cálculo unificado de faturamento, quantidade e ticket médio de PRA-25 / PRA-65
-foi integrado e homologado. O incremento PRA-30 / PRA-63 implementa os marts
-diários e aguarda integração e homologação no ambiente real.
+Os Sprints 0, 1 e 2 foram concluídos. Normalização, venda válida, fornecedores,
+KPIs e marts diários foram integrados e homologados no ambiente real até PRA-30 /
+PRA-63. O trabalho atual inicia o Sprint 4 com o contrato previsível da API de
+relatórios (PRA-29 / PRA-61) e um painel HTML administrativo para homologação.
+A API final e o dashboard publicado ainda dependem de integração, deploy e aceite.
 
 ## Decisões do MVP
 
@@ -43,6 +42,7 @@ src/
   jobs/         Rotinas agendadas
   repositories/ Persistência idempotente no Google Sheets
   services/     Regras de aplicação
+  ui/           HTML administrativo do Apps Script
   appsscript.json
 tests/          Testes locais de estrutura e segurança
 scripts/        Validações executadas antes de publicar
@@ -112,8 +112,11 @@ Quando o orçamento seguro se encerra, o Apps Script agenda uma única continua�
 por `runDailySyncContinuation()`.
 
 O contrato de agrupamento, recuperação e implantação dos marts está em
-[`docs/marts.md`](docs/marts.md). Para gerar o runtime completo e rastreável,
-use `npm run build:runtime -- /caminho/temporario/runtime`.
+[`docs/marts.md`](docs/marts.md). O envelope da API, os filtros e a interface
+de homologação estão em [`docs/reporting-dashboard.md`](docs/reporting-dashboard.md).
+Para gerar o pacote completo e rastreável, use
+`npm run build:runtime -- /caminho/temporario/runtime`. O builder inclui
+`Runtime.gs`, manifesto e arquivos HTML no mesmo hash de fonte.
 
 Nunca envie ao GitHub:
 
@@ -155,6 +158,7 @@ Esse comando valida a estrutura, o manifesto e padrões comuns de vazamento de s
 - Persistência segura de vínculos produto-fornecedor: PRA-84
 - Faturamento, quantidade e ticket médio: PRA-25 / US-021 e PRA-65 / TT-021
 - Marts analíticos incrementais: PRA-30 / US-022 e PRA-63 / TT-022
+- Contrato da API e painel de homologação: PRA-29 / US-024 e PRA-61 / TT-024
 
 ## Referências oficiais
 
