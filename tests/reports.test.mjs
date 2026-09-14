@@ -144,7 +144,7 @@ test('relatórios: validações retornam códigos estáveis sem detalhes interno
 
 test('relatórios: lock ocupado retorna indisponibilidade temporária', async () => {
   const fixtureValue = await fixture({ busy: true });
-  const result = copy(fixtureValue.context.PRAReportService.execute({});
+  const result = copy(fixtureValue.context.PRAReportService.execute({}));
   assert.equal(result.errors[0].code, 'report_source_busy');
   assert.equal(result.data, null);
 });
