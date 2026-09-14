@@ -27,6 +27,7 @@ const requiredFiles = [
   'docs/valid-sales.md',
   'docs/kpis.md',
   'docs/marts.md',
+  'docs/reporting-dashboard.md',
   'scripts/build-apps-script.mjs',
   'docs/samples/bling/product-detail-with-variations.json',
   'docs/samples/bling/product-list.json',
@@ -68,7 +69,9 @@ const requiredFiles = [
   'src/services/ValidSalesService.gs',
   'src/services/KpiService.gs',
   'src/services/MartService.gs',
-  'src/services/OrdersAnalyticsPipeline.gs'
+  'src/services/ReportService.gs',
+  'src/services/OrdersAnalyticsPipeline.gs',
+  'src/ui/Index.html'
 ];
 
 for (const relative of requiredFiles) {
@@ -93,16 +96,16 @@ for (const forbidden of forbiddenFiles) {
   assert.ok(!rootFiles.includes(forbidden), `${forbidden} não pode ser versionado`);
 }
 
-async function listGsFiles(directory) {
+async function listSourceFiles(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
   const nested = await Promise.all(entries.map(async (entry) => {
     const target = path.join(directory, entry.name);
-    return entry.isDirectory() ? listGsFiles(target) : [target];
+    return entry.isDirectory() ? listSourceFiles(target) : [target];
   }));
-  return nested.flat().filter((file) => file.endsWith('.gs'));
+  return nested.flat().filter((file) => file.endsWith('.gs') || file.endsWith('.html'));
 }
 
-const scanTargets = await listGsFiles(path.join(root, 'src'));
+const scanTargets = await listSourceFiles(path.join(root, 'src'));
 const secretPatterns = [
   /Bearer\s+[A-Za-z0-9._-]{20,}/,
   /(?:client_secret|refresh_token|access_token)\s*[:=]\s*['\"](?!BLING_(?:CLIENT_SECRET|REFRESH_TOKEN|ACCESS_TOKEN)['\"])[^'\"]{16,}['\"]/i,

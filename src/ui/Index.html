@@ -1,0 +1,700 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="color-scheme" content="light">
+  <title>Pratearts Analytics</title>
+  <style>
+    :root {
+      --ink: #172321;
+      --muted: #687775;
+      --line: #dfe7e4;
+      --surface: #ffffff;
+      --canvas: #f3f6f4;
+      --brand: #126b5c;
+      --brand-dark: #0b4f45;
+      --brand-soft: #dceee9;
+      --accent: #e98a4b;
+      --accent-soft: #fff0e5;
+      --danger: #b93f3f;
+      --danger-soft: #fbe9e8;
+      --warning: #9b650d;
+      --warning-soft: #fff4d8;
+      --shadow: 0 18px 50px rgba(20, 50, 44, .08);
+      --radius: 22px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 92% 0%, rgba(18, 107, 92, .09), transparent 27rem),
+        var(--canvas);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    .shell { min-height: 100vh; }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      min-height: 76px;
+      padding: 0 32px;
+      border-bottom: 1px solid rgba(216, 228, 224, .9);
+      background: rgba(248, 250, 249, .9);
+      backdrop-filter: blur(16px);
+    }
+    .brand { display: flex; align-items: center; gap: 13px; min-width: 230px; }
+    .brand-mark {
+      display: grid;
+      width: 42px;
+      height: 42px;
+      place-items: center;
+      border-radius: 14px;
+      color: #fff;
+      background: linear-gradient(145deg, var(--brand), var(--brand-dark));
+      box-shadow: 0 8px 20px rgba(18, 107, 92, .22);
+      font-weight: 800;
+      letter-spacing: -.04em;
+    }
+    .brand strong { display: block; font-size: 15px; letter-spacing: -.01em; }
+    .brand span { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
+    .topnav { display: flex; align-items: center; gap: 4px; }
+    .topnav a {
+      padding: 9px 12px;
+      border-radius: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+      text-decoration: none;
+    }
+    .topnav a:hover { color: var(--brand); background: var(--brand-soft); }
+    .live-status {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--brand-dark);
+      font-size: 12px;
+      font-weight: 750;
+    }
+    .status-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #23a281;
+      box-shadow: 0 0 0 5px rgba(35, 162, 129, .12);
+    }
+    .status-dot.loading { background: #d39634; animation: pulse 1.3s infinite; }
+    .status-dot.error { background: var(--danger); }
+    @keyframes pulse { 50% { opacity: .45; } }
+    .content { width: min(1440px, 100%); margin: 0 auto; padding: 38px 32px 60px; }
+    .hero {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 28px;
+      margin-bottom: 28px;
+    }
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--brand);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+    h1 { margin: 0; font-size: clamp(28px, 4vw, 44px); letter-spacing: -.045em; line-height: 1.05; }
+    .hero-copy { max-width: 620px; }
+    .hero-copy > p:last-child { margin: 13px 0 0; color: var(--muted); font-size: 15px; line-height: 1.65; }
+    .coverage {
+      min-width: 230px;
+      padding: 15px 18px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, .65);
+    }
+    .coverage span { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+    .coverage strong { display: block; margin-top: 6px; font-size: 14px; }
+    .notice, .error-box {
+      display: none;
+      margin-bottom: 18px;
+      padding: 13px 16px;
+      border-radius: 13px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .notice.visible { display: block; color: var(--warning); background: var(--warning-soft); border: 1px solid #f1dda8; }
+    .error-box.visible { display: block; color: var(--danger); background: var(--danger-soft); border: 1px solid #f0c8c5; }
+    .filters {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(150px, 1fr)) minmax(180px, 1.2fr) minmax(170px, 1fr) auto;
+      gap: 12px;
+      align-items: end;
+      margin-bottom: 24px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+    .field label { display: block; margin: 0 0 7px 2px; color: var(--muted); font-size: 11px; font-weight: 750; }
+    .field input, .field select {
+      width: 100%;
+      height: 44px;
+      padding: 0 13px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      outline: none;
+      color: var(--ink);
+      background: #fbfcfb;
+      transition: border-color .18s, box-shadow .18s;
+    }
+    .field input:focus, .field select:focus {
+      border-color: var(--brand);
+      box-shadow: 0 0 0 4px rgba(18, 107, 92, .09);
+    }
+    .apply {
+      height: 44px;
+      padding: 0 20px;
+      border: 0;
+      border-radius: 12px;
+      color: #fff;
+      background: var(--brand);
+      font-weight: 750;
+      box-shadow: 0 8px 18px rgba(18, 107, 92, .2);
+    }
+    .apply:hover { background: var(--brand-dark); }
+    .apply:disabled { opacity: .58; cursor: wait; }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .metric {
+      position: relative;
+      overflow: hidden;
+      min-height: 148px;
+      padding: 21px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+    .metric::after {
+      position: absolute;
+      right: -22px;
+      bottom: -36px;
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background: var(--brand-soft);
+      content: "";
+      opacity: .62;
+    }
+    .metric.accent::after { background: var(--accent-soft); }
+    .metric-label { color: var(--muted); font-size: 12px; font-weight: 700; }
+    .metric-value { display: block; margin-top: 17px; font-size: clamp(25px, 3vw, 35px); font-weight: 800; letter-spacing: -.045em; }
+    .metric-note { display: block; margin-top: 8px; color: var(--muted); font-size: 11px; }
+    body.loading .metric-value {
+      width: 68%;
+      height: 34px;
+      border-radius: 8px;
+      color: transparent;
+      background: linear-gradient(90deg, #eef2f0 25%, #f8faf9 50%, #eef2f0 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.3s infinite;
+    }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+    .grid-two { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(300px, .85fr); gap: 16px; margin-bottom: 16px; }
+    .panel {
+      min-width: 0;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+    .panel-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+    .panel h2 { margin: 0; font-size: 17px; letter-spacing: -.02em; }
+    .panel-sub { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; }
+    .chip {
+      padding: 6px 9px;
+      border-radius: 999px;
+      color: var(--brand-dark);
+      background: var(--brand-soft);
+      font-size: 10px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .chart-wrap { position: relative; min-height: 270px; }
+    #trendChart { width: 100%; height: 270px; overflow: visible; }
+    .chart-grid { stroke: #e9efed; stroke-width: 1; }
+    .chart-area { fill: url(#areaGradient); }
+    .chart-line { fill: none; stroke: var(--brand); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+    .chart-point { fill: var(--surface); stroke: var(--brand); stroke-width: 2; }
+    .chart-label { fill: var(--muted); font-size: 10px; }
+    .empty {
+      display: grid;
+      min-height: 220px;
+      place-items: center;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+    }
+    .quality-score { display: flex; align-items: center; gap: 16px; margin: 6px 0 22px; }
+    .score-ring {
+      display: grid;
+      width: 76px;
+      height: 76px;
+      place-items: center;
+      border-radius: 50%;
+      background: conic-gradient(var(--accent) var(--score), #edf1ef 0);
+    }
+    .score-ring::before {
+      grid-area: 1 / 1;
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      background: white;
+      content: "";
+    }
+    .score-ring strong { z-index: 1; font-size: 16px; }
+    .quality-score p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+    .quality-score p strong { display: block; color: var(--ink); font-size: 18px; }
+    .quality-list { display: grid; gap: 10px; }
+    .quality-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 11px 0;
+      border-top: 1px solid #edf1ef;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .quality-row strong { color: var(--ink); }
+    .ranking-table { width: 100%; border-collapse: collapse; }
+    .ranking-table th {
+      padding: 0 10px 11px;
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: .05em;
+      text-align: left;
+      text-transform: uppercase;
+    }
+    .ranking-table th:last-child, .ranking-table td:last-child { text-align: right; }
+    .ranking-table td { padding: 14px 10px; border-top: 1px solid #edf1ef; font-size: 12px; vertical-align: middle; }
+    .rank { color: var(--muted); font-weight: 800; }
+    .product-name { display: block; max-width: 360px; overflow: hidden; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
+    .product-meta { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; }
+    .bar { width: 100%; height: 6px; margin-top: 8px; overflow: hidden; border-radius: 99px; background: #edf1ef; }
+    .bar span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--brand), #4ba990); }
+    .ops {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    .op-card { min-height: 108px; padding: 16px; border-radius: 16px; background: #f7f9f8; }
+    .op-card span { display: block; color: var(--muted); font-size: 10px; font-weight: 750; text-transform: uppercase; letter-spacing: .07em; }
+    .op-card strong { display: block; margin-top: 11px; font-size: 15px; line-height: 1.35; }
+    .op-card small { display: block; margin-top: 7px; color: var(--muted); font-size: 10px; overflow-wrap: anywhere; }
+    footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 22px 3px 0;
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.5;
+    }
+    @media (max-width: 1040px) {
+      .topnav { display: none; }
+      .filters { grid-template-columns: repeat(2, 1fr); }
+      .apply { grid-column: span 2; }
+      .metrics { grid-template-columns: repeat(2, 1fr); }
+      .grid-two { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 680px) {
+      .topbar { padding: 0 18px; }
+      .live-status span:last-child { display: none; }
+      .content { padding: 28px 16px 44px; }
+      .hero { align-items: stretch; flex-direction: column; }
+      .coverage { min-width: 0; }
+      .filters { grid-template-columns: 1fr; padding: 15px; }
+      .apply { grid-column: auto; }
+      .metrics { grid-template-columns: 1fr; }
+      .metric { min-height: 126px; }
+      .ops { grid-template-columns: 1fr; }
+      .panel { padding: 18px 15px; }
+      .ranking-scroll { overflow-x: auto; }
+      .ranking-table { min-width: 620px; }
+      footer { flex-direction: column; }
+    }
+  </style>
+</head>
+<body class="loading">
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">P</div>
+        <div><strong>Pratearts Analytics</strong><span>Painel administrativo</span></div>
+      </div>
+      <nav class="topnav" aria-label="Seções do painel">
+        <a href="#overview">Visão geral</a>
+        <a href="#trend">Evolução</a>
+        <a href="#ranking">Ranking</a>
+        <a href="#quality">Qualidade</a>
+      </nav>
+      <div class="live-status" aria-live="polite">
+        <span class="status-dot loading" id="statusDot"></span>
+        <span id="statusText">Consultando dados</span>
+      </div>
+    </header>
+
+    <main class="content">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Inteligência comercial</p>
+          <h1>Decisões claras, dados confirmados.</h1>
+          <p>Indicadores consolidados diretamente dos marts homologados, com rastreabilidade de período, qualidade e operação.</p>
+        </div>
+        <div class="coverage">
+          <span>Cobertura confirmada</span>
+          <strong id="coverageText">Carregando…</strong>
+        </div>
+      </section>
+
+      <div class="notice" id="previewNotice">
+        Pré-visualização local com dados sintéticos. No Apps Script, este painel consulta somente os marts confirmados.
+      </div>
+      <div class="error-box" id="errorBox" role="alert"></div>
+
+      <form class="filters" id="filters" aria-label="Filtros dos indicadores">
+        <div class="field">
+          <label for="startDate">DATA INICIAL</label>
+          <input id="startDate" name="startDate" type="date">
+        </div>
+        <div class="field">
+          <label for="endDate">DATA FINAL</label>
+          <input id="endDate" name="endDate" type="date">
+        </div>
+        <div class="field">
+          <label for="view">VISÃO DO RANKING</label>
+          <select id="view" name="view">
+            <option value="product">Produtos e variações</option>
+            <option value="parent">Famílias de produtos</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="supplierId">FORNECEDOR ATUAL</label>
+          <input id="supplierId" name="supplierId" inputmode="numeric" placeholder="Todos">
+        </div>
+        <button class="apply" id="applyButton" type="submit">Aplicar filtros</button>
+      </form>
+
+      <section class="metrics" id="overview" aria-label="Indicadores principais">
+        <article class="metric accent">
+          <span class="metric-label">Faturamento</span>
+          <strong class="metric-value" id="revenueValue">—</strong>
+          <span class="metric-note">Sem frete, após desconto por item</span>
+        </article>
+        <article class="metric">
+          <span class="metric-label">Pedidos válidos</span>
+          <strong class="metric-value" id="ordersValue">—</strong>
+          <span class="metric-note">Situação Atendido</span>
+        </article>
+        <article class="metric">
+          <span class="metric-label">Itens vendidos</span>
+          <strong class="metric-value" id="itemsValue">—</strong>
+          <span class="metric-note">Devoluções reduzem o total</span>
+        </article>
+        <article class="metric">
+          <span class="metric-label">Ticket médio</span>
+          <strong class="metric-value" id="ticketValue">—</strong>
+          <span class="metric-note">Faturamento ÷ pedidos válidos</span>
+        </article>
+      </section>
+
+      <section class="grid-two">
+        <article class="panel" id="trend">
+          <div class="panel-head">
+            <div><h2>Evolução do faturamento</h2><span class="panel-sub">Série diária dos períodos confirmados</span></div>
+            <span class="chip" id="trendCount">0 dias</span>
+          </div>
+          <div class="chart-wrap" id="chartWrap">
+            <svg id="trendChart" viewBox="0 0 760 270" role="img" aria-label="Evolução diária do faturamento"></svg>
+          </div>
+        </article>
+
+        <article class="panel" id="quality">
+          <div class="panel-head">
+            <div><h2>Qualidade dos dados</h2><span class="panel-sub">Exceções preservadas e auditáveis</span></div>
+            <span class="chip">Monitorado</span>
+          </div>
+          <div class="quality-score">
+            <div class="score-ring" id="qualityRing" style="--score:0%"><strong id="qualityPercent">—</strong></div>
+            <p><strong id="qualityOpen">—</strong>ocorrências ainda abertas</p>
+          </div>
+          <div class="quality-list" id="qualityList"></div>
+        </article>
+      </section>
+
+      <section class="grid-two">
+        <article class="panel" id="ranking">
+          <div class="panel-head">
+            <div><h2 id="rankingTitle">Produtos em destaque</h2><span class="panel-sub">Ordenação por faturamento no período</span></div>
+            <span class="chip" id="rankingCount">Top 0</span>
+          </div>
+          <div class="ranking-scroll">
+            <table class="ranking-table">
+              <thead><tr><th>#</th><th>Produto</th><th>Quantidade</th><th>Pedidos</th><th>Faturamento</th></tr></thead>
+              <tbody id="rankingBody"></tbody>
+            </table>
+            <div class="empty" id="rankingEmpty" hidden>Nenhum item encontrado para os filtros aplicados.</div>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <div><h2>Operação</h2><span class="panel-sub">Estado técnico sem exposição de segredos</span></div>
+            <span class="chip" id="operationChip">Verificando</span>
+          </div>
+          <div class="ops">
+            <div class="op-card"><span>Último cálculo</span><strong id="lastCalculation">—</strong><small>Horário do mart</small></div>
+            <div class="op-card"><span>Triggers</span><strong id="triggerCount">—</strong><small id="triggerHandlers">Nenhum handler</small></div>
+            <div class="op-card"><span>Runtime</span><strong id="runtimeRevision">—</strong><small id="runtimeHash">Hash indisponível</small></div>
+          </div>
+        </article>
+      </section>
+
+      <footer>
+        <span>Fornecedor exibido é o vínculo atual, não histórico.</span>
+        <span id="generatedAt">Aguardando atualização.</span>
+      </footer>
+    </main>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      var form = document.getElementById('filters');
+      var applyButton = document.getElementById('applyButton');
+      var errorBox = document.getElementById('errorBox');
+      var statusDot = document.getElementById('statusDot');
+      var statusText = document.getElementById('statusText');
+
+      function currency(value) {
+        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0));
+      }
+      function decimal(value) {
+        return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(Number(value || 0));
+      }
+      function integer(value) {
+        return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(Number(value || 0));
+      }
+      function date(value) {
+        if (!value) return 'Não disponível';
+        return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(new Date(value + (value.length === 10 ? 'T12:00:00Z' : '')));
+      }
+      function dateTime(value) {
+        if (!value) return 'Não disponível';
+        return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
+      }
+      function escapeHtml(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, function (char) {
+          return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char];
+        });
+      }
+      function setLoading(active) {
+        document.body.classList.toggle('loading', active);
+        applyButton.disabled = active;
+        statusDot.className = 'status-dot' + (active ? ' loading' : '');
+        statusText.textContent = active ? 'Consultando dados' : 'Dados confirmados';
+      }
+      function showError(message) {
+        errorBox.textContent = message || '';
+        errorBox.classList.toggle('visible', Boolean(message));
+        if (message) {
+          statusDot.className = 'status-dot error';
+          statusText.textContent = 'Consulta indisponível';
+        }
+      }
+      function renderChart(rows) {
+        var svg = document.getElementById('trendChart');
+        if (!rows.length) {
+          svg.innerHTML = '<text x="380" y="135" text-anchor="middle" class="chart-label">Sem dados para o período</text>';
+          return;
+        }
+        var width = 760, height = 270, left = 42, right = 16, top = 18, bottom = 34;
+        var values = rows.map(function (row) { return Number(row.revenue || 0); });
+        var min = Math.min.apply(null, values.concat([0]));
+        var max = Math.max.apply(null, values.concat([0]));
+        var spread = max - min || 1;
+        function x(index) { return left + (rows.length === 1 ? (width - left - right) / 2 : index * (width - left - right) / (rows.length - 1)); }
+        function y(value) { return top + (max - value) * (height - top - bottom) / spread; }
+        var points = rows.map(function (row, index) { return x(index).toFixed(1) + ',' + y(values[index]).toFixed(1); });
+        var line = 'M' + points.join(' L');
+        var area = line + ' L' + x(rows.length - 1).toFixed(1) + ',' + (height - bottom) +
+          ' L' + x(0).toFixed(1) + ',' + (height - bottom) + ' Z';
+        var grids = [0, .25, .5, .75, 1].map(function (step) {
+          var gy = top + step * (height - top - bottom);
+          var label = currency(max - step * spread);
+          return '<line class="chart-grid" x1="' + left + '" y1="' + gy + '" x2="' + (width - right) + '" y2="' + gy + '"></line>' +
+            '<text class="chart-label" x="' + (left - 7) + '" y="' + (gy + 3) + '" text-anchor="end">' + escapeHtml(label.replace(',00', '')) + '</text>';
+        }).join('');
+        var dots = rows.map(function (row, index) {
+          if (rows.length > 16 && index % Math.ceil(rows.length / 12) !== 0 && index !== rows.length - 1) return '';
+          return '<circle class="chart-point" cx="' + x(index) + '" cy="' + y(values[index]) + '" r="3"><title>' +
+            escapeHtml(date(row.period) + ': ' + currency(row.revenue)) + '</title></circle>';
+        }).join('');
+        svg.innerHTML = '<defs><linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">' +
+          '<stop offset="0%" stop-color="#126b5c" stop-opacity=".22"></stop><stop offset="100%" stop-color="#126b5c" stop-opacity="0"></stop>' +
+          '</linearGradient></defs>' + grids + '<path class="chart-area" d="' + area + '"></path><path class="chart-line" d="' + line + '"></path>' + dots +
+          '<text class="chart-label" x="' + left + '" y="' + (height - 8) + '">' + escapeHtml(date(rows[0].period)) + '</text>' +
+          '<text class="chart-label" x="' + (width - right) + '" y="' + (height - 8) + '" text-anchor="end">' + escapeHtml(date(rows[rows.length - 1].period)) + '</text>';
+      }
+      function renderRanking(rows, view) {
+        var body = document.getElementById('rankingBody');
+        var empty = document.getElementById('rankingEmpty');
+        var maximum = rows.length ? Math.max.apply(null, rows.map(function (row) { return Number(row.revenue || 0); })) : 0;
+        body.innerHTML = rows.map(function (row) {
+          var meta = [row.sku ? 'SKU ' + row.sku : null, row.supplierId ? 'Fornecedor ' + row.supplierId : 'Sem fornecedor'].filter(Boolean).join(' · ');
+          var percent = maximum > 0 ? Math.max(3, Number(row.revenue || 0) / maximum * 100) : 0;
+          return '<tr><td class="rank">' + integer(row.position) + '</td><td><span class="product-name">' +
+            escapeHtml(row.name) + '</span><span class="product-meta">' + escapeHtml(meta) +
+            '</span><div class="bar"><span style="width:' + percent.toFixed(1) + '%"></span></div></td><td>' +
+            decimal(row.quantity) + '</td><td>' + integer(row.ordersCount) + '</td><td><strong>' +
+            escapeHtml(currency(row.revenue)) + '</strong></td></tr>';
+        }).join('');
+        empty.hidden = rows.length > 0;
+        document.getElementById('rankingCount').textContent = 'Top ' + rows.length;
+        document.getElementById('rankingTitle').textContent = view === 'parent' ? 'Famílias em destaque' : 'Produtos em destaque';
+      }
+      function renderQuality(quality) {
+        var total = Number(quality.totalErrors || 0);
+        var open = Number(quality.unresolvedErrors || 0);
+        var percent = total === 0 ? 100 : Math.max(0, Math.round((total - open) / total * 100));
+        document.getElementById('qualityRing').style.setProperty('--score', percent + '%');
+        document.getElementById('qualityPercent').textContent = percent + '%';
+        document.getElementById('qualityOpen').textContent = integer(open);
+        var rows = (quality.errorsByCode || []).slice(0, 3).map(function (item) {
+          return '<div class="quality-row"><span>' + escapeHtml(item.code) + '</span><strong>' + integer(item.count) + '</strong></div>';
+        });
+        rows.push('<div class="quality-row"><span>Janelas pendentes</span><strong>' + integer(quality.pendingWindows) + '</strong></div>');
+        document.getElementById('qualityList').innerHTML = rows.join('');
+      }
+      function renderOperations(operations, runtime) {
+        document.getElementById('lastCalculation').textContent = dateTime(operations.latestCalculationAt);
+        var triggers = operations.triggers || { installed: null, handlers: [] };
+        document.getElementById('triggerCount').textContent = triggers.installed == null ? 'Não disponível' : integer(triggers.installed);
+        document.getElementById('triggerHandlers').textContent = triggers.handlers && triggers.handlers.length ? triggers.handlers.join(', ') : 'Nenhum handler';
+        var revision = runtime && runtime.revision;
+        var hash = runtime && runtime.sourceHash;
+        document.getElementById('runtimeRevision').textContent = revision ? revision.slice(0, 10) : 'Não disponível';
+        document.getElementById('runtimeHash').textContent = hash ? 'SHA-256 ' + hash.slice(0, 12) + '…' : 'Hash indisponível';
+        document.getElementById('operationChip').textContent = Number(triggers.installed || 0) === 0 ? 'Sem agenda' : 'Agendado';
+      }
+      function render(envelope) {
+        setLoading(false);
+        if (!envelope || !Array.isArray(envelope.errors)) {
+          showError('A resposta recebida não segue o contrato esperado.');
+          return;
+        }
+        if (envelope.errors.length || !envelope.data) {
+          showError(envelope.errors.length ? envelope.errors[0].message : 'Nenhum dado foi retornado.');
+          return;
+        }
+        showError('');
+        var data = envelope.data;
+        var meta = envelope.meta || {};
+        var filters = envelope.filtersApplied || {};
+        var kpis = data.kpis || {};
+        document.getElementById('revenueValue').textContent = currency(kpis.revenue);
+        document.getElementById('ordersValue').textContent = integer(kpis.validOrders);
+        document.getElementById('itemsValue').textContent = decimal(kpis.itemsQuantity);
+        document.getElementById('ticketValue').textContent = currency(kpis.averageTicket);
+        document.getElementById('trendCount').textContent = integer((data.trend || []).length) + ' dias';
+        renderChart(data.trend || []);
+        renderRanking(data.rankings || [], filters.view);
+        renderQuality(data.quality || {});
+        renderOperations(data.operations || {}, meta.runtime || {});
+        var coverage = meta.coverage || {};
+        document.getElementById('coverageText').textContent = coverage.startDate && coverage.endDate
+          ? date(coverage.startDate) + ' — ' + date(coverage.endDate) + ' · ' + integer(coverage.confirmedPeriods) + ' períodos'
+          : 'Sem períodos confirmados';
+        document.getElementById('generatedAt').textContent = 'Atualizado em ' + dateTime(meta.generatedAt);
+        if (filters.startDate) document.getElementById('startDate').value = filters.startDate;
+        if (filters.endDate) document.getElementById('endDate').value = filters.endDate;
+        if (filters.view) document.getElementById('view').value = filters.view;
+        if (filters.supplierId) document.getElementById('supplierId').value = filters.supplierId;
+      }
+      function transportError() {
+        setLoading(false);
+        showError('Não foi possível comunicar com o Apps Script. Recarregue a página e tente novamente.');
+      }
+      function previewEnvelope() {
+        var days = ['2026-09-01','2026-09-02','2026-09-03','2026-09-04','2026-09-05','2026-09-06','2026-09-07','2026-09-08'];
+        var revenue = [1280,1940,1680,2380,2150,2860,2540,3210];
+        return {
+          data: {
+            kpis: { revenue: 18040, validOrders: 76, itemsQuantity: 143, averageTicket: 237.37 },
+            trend: days.map(function (period, index) { return { period: period, revenue: revenue[index] }; }),
+            rankings: [
+              { position: 1, name: 'Coleção sintética Aurora', sku: 'DEMO-01', supplierId: '9001', quantity: 34, ordersCount: 22, revenue: 4280 },
+              { position: 2, name: 'Linha sintética Essencial', sku: 'DEMO-02', supplierId: '9002', quantity: 29, ordersCount: 18, revenue: 3650 },
+              { position: 3, name: 'Conjunto sintético Horizonte', sku: 'DEMO-03', supplierId: null, quantity: 21, ordersCount: 15, revenue: 2870 },
+              { position: 4, name: 'Variação sintética Brisa', sku: 'DEMO-04', supplierId: '9001', quantity: 18, ordersCount: 12, revenue: 2140 }
+            ],
+            quality: { totalErrors: 7, unresolvedErrors: 7, errorsByCode: [{ code: 'synthetic_quality_error', count: 7 }], pendingWindows: 0 },
+            operations: { latestCalculationAt: '2026-09-08T18:30:00.000Z', triggers: { installed: 0, handlers: [] } }
+          },
+          meta: {
+            generatedAt: new Date().toISOString(),
+            coverage: { startDate: '2026-09-01', endDate: '2026-09-08', confirmedPeriods: 8 },
+            runtime: { revision: 'preview-local', sourceHash: null }
+          },
+          filtersApplied: { startDate: '2026-09-01', endDate: '2026-09-08', view: 'product', supplierId: null, limit: 10 },
+          errors: []
+        };
+      }
+      function load(filters) {
+        setLoading(true);
+        showError('');
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run.withSuccessHandler(render).withFailureHandler(transportError).getDashboardSnapshot(filters || {});
+          return;
+        }
+        document.getElementById('previewNotice').classList.add('visible');
+        window.setTimeout(function () { render(previewEnvelope()); }, 350);
+      }
+
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        load({
+          startDate: document.getElementById('startDate').value,
+          endDate: document.getElementById('endDate').value,
+          view: document.getElementById('view').value,
+          supplierId: document.getElementById('supplierId').value,
+          limit: 10
+        });
+      });
+      load({});
+    })();
+  </script>
+</body>
+</html>

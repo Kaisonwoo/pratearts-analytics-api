@@ -166,3 +166,13 @@ function runProductSuppliersSync(reset) {
 function provisionDataLayers() {
   return PRADataLayerProvisioner.run();
 }
+
+/**
+ * Consulta indicadores confirmados usando o contrato público da PRA-29.
+ * É o único entrypoint chamado diretamente pelo HTML via google.script.run.
+ * @param {Object} filters Filtros públicos de período, visão e fornecedor.
+ * @return {Object} Envelope com data, meta, filtersApplied e errors.
+ */
+function getDashboardSnapshot(filters) {
+  return PRAReportService.execute(filters || {});
+}
