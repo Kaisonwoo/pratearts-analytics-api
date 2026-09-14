@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
+const copy = value => JSON.parse(JSON.stringify(value));
+
 const headers = {
   mart_period_state: ['period_key','source_hash','output_hash','calculated_at','run_id'],
   mart_kpis: ['period_key','period_start','period_end','valid_orders','items_quantity','revenue','average_ticket','calculated_at','run_id'],
@@ -89,12 +91,12 @@ async function fixture(options = {}) {
   });
   vm.runInContext(await readFile('src/repositories/DataLayerSchema.gs', 'utf8'), context);
   vm.runInContext(await readFile('src/services/ReportService.gs', 'utf8'), context);
-  return { context, logs, locked };
+  return { context, logs, locked: () => locked };
 }
 
 test('relatórios: envelope agrega apenas períodos confirmados e uma visão', async () => {
   const fixtureValue = await fixture();
-  const result = fixtureValue.context.PRAReportService.execute({});
+  const result = copy(fixtureValue.context.PRAReportService.execute({}));
   assert.deepEqual(Object.keys(result), ['data', 'meta', 'filtersApplied', 'errors']);
   assert.deepEqual(result.errors, []);
   assert.deepEqual(
@@ -107,20 +109,20 @@ test('relatórios: envelope agrega apenas períodos confirmados e uma visão', a
   assert.equal(result.meta.runtime.revision, 'synthetic-revision');
   assert.equal(result.data.quality.unresolvedErrors, 1);
   assert.equal(result.data.operations.triggers.installed, 1);
-  assert.equal(fixtureValue.locked, false);
+  assert.equal(fixtureValue.locked(), false);
   assert.ok(!JSON.stringify(result).includes('entity_key'));
   assert.ok(!JSON.stringify(result).includes('correlation_id'));
 });
 
 test('relatórios: visão de família e fornecedor são aplicados antes da agregação', async () => {
   const fixtureValue = await fixture();
-  const result = fixtureValue.context.PRAReportService.execute({
+  const result = copy(fixtureValue.context.PRAReportService.execute({
     startDate: '2026-09-10',
     endDate: '2026-09-11',
     view: 'parent',
     supplierId: '901',
     limit: 5
-  });
+  }));
   assert.deepEqual(result.errors, []);
   assert.equal(result.data.rankings.length, 1);
   assert.equal(result.data.rankings[0].productId, '100');
@@ -130,10 +132,10 @@ test('relatórios: visão de família e fornecedor são aplicados antes da agreg
 
 test('relatórios: validações retornam códigos estáveis sem detalhes internos', async () => {
   const fixtureValue = await fixture();
-  const invalid = fixtureValue.context.PRAReportService.execute({
+  const invalid = copy(fixtureValue.context.PRAReportService.execute({
     startDate: '2026-09-12',
     endDate: '2026-09-10'
-  });
+  }));
   assert.equal(invalid.data, null);
   assert.equal(invalid.errors[0].code, 'report_invalid_date_range');
   assert.deepEqual(Object.keys(invalid), ['data', 'meta', 'filtersApplied', 'errors']);
@@ -142,7 +144,7 @@ test('relatórios: validações retornam códigos estáveis sem detalhes interno
 
 test('relatórios: lock ocupado retorna indisponibilidade temporária', async () => {
   const fixtureValue = await fixture({ busy: true });
-  const result = fixtureValue.context.PRAReportService.execute({});
+  const result = copy(fixtureValue.context.PRAReportService.execute({});
   assert.equal(result.errors[0].code, 'report_source_busy');
   assert.equal(result.data, null);
 });
