@@ -10,10 +10,10 @@ test('runtime consolidado carrega todos os módulos e entradas operacionais', as
   const built = await buildRuntime(process.cwd(), 'synthetic-revision');
   const context = vm.createContext({});
   vm.runInContext(built.code, context);
-  for (const name of ['PRAMartsJob', 'PRAOrdersAnalyticsPipeline', 'PRAKpiService', 'PRAMartService', 'PRAReportService']) {
+  for (const name of ['PRAMartsJob', 'PRAOrdersAnalyticsPipeline', 'PRAKpiService', 'PRAMartService', 'PRAReportService', 'PRADailyTriggerScheduler']) {
     assert.equal(typeof context[name], 'object', name);
   }
-  for (const name of ['runDailySync', 'runMartsBuild', 'runMartsContinuation', 'provisionDataLayers', 'getDashboardSnapshot']) {
+  for (const name of ['runDailySync', 'installDailySyncTrigger', 'getDailySyncTriggerStatus', 'removeDailySyncTrigger', 'runMartsBuild', 'runMartsContinuation', 'provisionDataLayers', 'getDashboardSnapshot']) {
     assert.equal(typeof context[name], 'function', name);
   }
   for (const file of built.files) assert.equal(built.code.split(`// BEGIN ${file}\n`).length, 2);

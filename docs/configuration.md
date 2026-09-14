@@ -38,11 +38,17 @@
 | `BLING_ORDER_DETAILS_QUEUE_INDEX` | Gerenciada | Não | Índice interno da fila fragmentada; contém somente contagens e chaves técnicas. |
 | `SYNC_TIMEZONE` | Não | Não | Padrão: `America/Sao_Paulo`. |
 | `SYNC_HOUR` | Não | Não | Inteiro entre 0 e 23; padrão: `6`. |
+| `PRA_DAILY_TRIGGER_SIGNATURE` | Gerenciada | Não | Assinatura técnica da agenda diária instalada. |
 
 O orçamento padrão encerra cada etapa com margem antes do limite do Apps Script.
 Quando ainda há páginas ou pedidos pendentes, o checkpoint é preservado e um
 único gatilho de continuação é programado. Esse fluxo usa o escopo
 `script.scriptapp` declarado no manifesto.
+
+A agenda recorrente é administrada somente por `installDailySyncTrigger()`,
+`getDailySyncTriggerStatus()` e `removeDailySyncTrigger()`. Alterações em
+`SYNC_HOUR` ou `SYNC_TIMEZONE` entram em vigor depois de executar novamente o
+instalador idempotente. Consulte [`daily-automation.md`](daily-automation.md).
 
 Os jobs incremental, reconciliação, fornecedores e detalhes usam leases curtos
 em Script Properties. Uma segunda execução do mesmo job retorna

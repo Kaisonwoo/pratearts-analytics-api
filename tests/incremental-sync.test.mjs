@@ -228,6 +228,10 @@ test('DailySync orquestra incremental, detalhes, normalizacao e marts', async ()
     PRAMartsJob: {
       run: () => ({ ok: true, status: 'completed', code: 'marts_completed' })
     },
+    PRAExecutionLease: {
+      acquire: () => ({ acquired: true, key: 'daily', token: 'one' }),
+      release: () => true
+    },
     PRALogger: { info: () => {} },
     Date,
     Number,
@@ -279,6 +283,10 @@ for (const martStatus of ['completed', 'in_progress', 'blocked']) {
         schedule: handler => { schedules.push(handler); return { ok: true, scheduled: true }; },
         cancel: () => ({ ok: true, scheduled: false })
       },
+      PRAExecutionLease: {
+        acquire: () => ({ acquired: true, key: 'daily', token: 'one' }),
+        release: () => true
+      },
       PRALogger: { info() {}, error() {} }
     });
     vm.runInContext(await readFile(path.join(root, 'src/core/RuntimeBudget.gs'), 'utf8'), context);
@@ -321,6 +329,10 @@ test('DailySync bloqueia normalização quando existem erros de detalhe não res
         return { ok: true, status: 'completed' };
       }
     },
+    PRAExecutionLease: {
+      acquire: () => ({ acquired: true, key: 'daily', token: 'one' }),
+      release: () => true
+    },
     PRALogger: { info() {}, error() {} },
     Date, Number, Boolean, Object, Math
   });
@@ -338,4 +350,31 @@ test('DailySync bloqueia normalização quando existem erros de detalhe não res
   assert.equal(result.ok, false);
   assert.equal(result.code, 'daily_sync_unresolved_errors');
   assert.equal(normalizationCalls, 0);
+});
+
+test('DailySync bloqueia uma segunda orquestracao concorrente', async () => {
+  let incrementalCalls = 0;
+  const context = vm.createContext({
+    PRAConfig: { getRequestPolicy: () => ({ executionBudgetMs: 270000 }) },
+    PRAExecutionLease: {
+      acquire: () => ({ acquired: false, expiresAt: Date.now() + 60000 }),
+      release: () => { throw new Error('lease bloqueado nao deve ser liberado'); }
+    },
+    PRAOrdersIncrementalSync: { run: () => { incrementalCalls += 1; } },
+    PRALogger: { info() {}, error() {} },
+    Date, Number, Boolean, Object, Math
+  });
+  vm.runInContext(
+    await readFile(path.join(root, 'src/core/RuntimeBudget.gs'), 'utf8'),
+    context,
+    { filename: 'src/core/RuntimeBudget.gs' }
+  );
+  await load(context, 'DailySyncJob.gs');
+
+  const result = context.PRADailySyncJob.run();
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 'blocked');
+  assert.equal(result.code, 'daily_sync_execution_in_progress');
+  assert.equal(result.continuationScheduled, false);
+  assert.equal(incrementalCalls, 0);
 });
