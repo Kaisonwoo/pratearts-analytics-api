@@ -80,6 +80,13 @@ no resumo os períodos já gravados e o bloqueio original, quando existente;
 a retomada usa os hashes persistidos e não exige limpar ou reiniciar a base.
 O teste de integração carrega o agendador real, incluindo a falha após a escrita.
 
+Os hashes de saída usam os tipos lógicos do esquema: IDs/SKUs como texto,
+datas como ISO e métricas como número. Isso evita recalcular indefinidamente
+quando o Sheets devolve um ID numérico gravado como string. Após o flush, o job
+relê os marts e compara os hashes antes de confirmar estado e janelas. Conversão
+com perda de conteúdo (por exemplo, SKU com zeros iniciais) retorna
+`mart_persisted_output_mismatch` e interrompe a continuação para diagnóstico.
+
 O recálculo é incremental **por período**, mas a implementação atual ainda lê
 as tabelas completas e grava em lote a fotografia completa de cada destino
 alterado, preservando os valores dos períodos intactos. O custo físico cresce

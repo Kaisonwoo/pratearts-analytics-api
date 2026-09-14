@@ -158,7 +158,11 @@ var PRAMartsJob = (function () {
       return next;
     });
     var productRows = prepared.products.map(function (row) { return row.concat([calculatedAt, runId]); });
-    var oldProducts = tables.stg_products.rows.map(function (row) { return row.slice(0, 7); });
+    var oldProducts = tables.stg_products.rows.map(function (row) {
+      return row.slice(0, 7).map(function (value, col) {
+        return col < 5 ? PRAMartService.text(value) : value;
+      });
+    });
     var productsChanged = PRAMartService.hash(PRAMartService.sorted(oldProducts)) !==
       PRAMartService.hash(PRAMartService.sorted(prepared.products));
     var operations = [];
@@ -172,6 +176,18 @@ var PRAMartsJob = (function () {
     if (operations.length) persist(operations);
     if (newState.length || completedWindows) {
       SpreadsheetApp.flush();
+      // Verify the storage round-trip before confirming state or windows. A
+      // lossy conversion must block, not keep scheduling the same periods.
+      if (newState.length) {
+        var persistedKpis = groupBy(read(spreadsheet, 'mart_kpis').rows, 0);
+        var persistedSales = groupBy(read(spreadsheet, 'mart_product_sales').rows, 1);
+        newState.forEach(function (state) {
+          if (PRAMartService.outputHash(persistedKpis[state[0]] || [],
+              persistedSales[state[0]] || []) !== state[2]) {
+            PRAMartService.fail('mart_persisted_output_mismatch');
+          }
+        });
+      }
       var commits = [];
       if (newState.length) commits.push(operation(tables.mart_period_state,
         replaceDays(tables.mart_period_state.rows, 0, selected, newState)));

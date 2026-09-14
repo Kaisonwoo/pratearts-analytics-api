@@ -23,7 +23,7 @@ async function realScheduler(f) {
 }
 async function fixture() {
   const sheets = new Map(), props = new Map(), logs = [], scheduled = new Set();
-  let writes = 0, busy = false, now = 1000000, uuid = 0;
+  let writes = 0, busy = false, now = 1000000, uuid = 0, typedCells = false;
   function sheet(name) {
     const s = { rows: [], fail: 0, maxRows: 1000, expansionFail: false, setFrozenRows() {},
       getMaxRows() { return this.maxRows; },
@@ -44,7 +44,13 @@ async function fixture() {
             writes++;
             values.forEach((valuesRow, r) => {
               s.rows[row - 1 + r] ??= [];
-              valuesRow.forEach((v, c) => { s.rows[row - 1 + r][col - 1 + c] = v; });
+              valuesRow.forEach((v, c) => {
+                if (typedCells && typeof v === 'string') {
+                  if (/^\d+$/.test(v)) v = Number(v);
+                  else if (/^\d{4}-\d{2}-\d{2}$/.test(v)) v = new Date(v + 'T03:00:00Z');
+                }
+                s.rows[row - 1 + r][col - 1 + c] = v;
+              });
             });
           },
           clearContent() {
@@ -125,8 +131,30 @@ async function fixture() {
   ]);
   const run = options => copy(context.PRAMartsJob.run({ scheduleContinuation: false, ...options }));
   return { context, sheets, props, logs, scheduled, seed, read, orders, items, baseOrders, baseItems, run,
-    writes: () => writes, busy: value => { busy = value; }, advance: value => { now += value; } };
+    writes: () => writes, busy: value => { busy = value; }, advance: value => { now += value; },
+    typedCells: () => { typedCells = true; } };
 }
+
+test('marts: retorno de IDs numéricos e datas do Sheets avança e não regrava', async () => {
+  const f = await fixture(); f.typedCells();
+  assert.equal(f.run({ maxPeriodsPerRun: 1 }).periodsRemaining, 1);
+  const second = f.run({ maxPeriodsPerRun: 1 });
+  assert.equal(second.status, 'completed');
+  assert.equal(second.periodsRemaining, 0);
+  const writes = f.writes();
+  assert.equal(f.run().periodsWritten, 0);
+  assert.equal(f.writes(), writes);
+});
+
+test('marts: perda de conteúdo na persistência bloqueia sem confirmar nem reagendar', async () => {
+  const f = await fixture(); await realScheduler(f); f.typedCells();
+  f.items(f.baseItems.map(item => ({ ...item, sku: '001' })));
+  const result = f.run({ scheduleContinuation: true });
+  assert.equal(result.status, 'blocked');
+  assert.equal(result.code, 'mart_persisted_output_mismatch');
+  assert.equal(f.read('mart_period_state').length, 0);
+  assert.equal(result.continuationScheduled, false);
+});
 
 test('marts: agendador real retoma o lote, deduplica e cancela somente seu gatilho', async () => {
   const f = await fixture(); const scheduler = await realScheduler(f);

@@ -169,8 +169,17 @@ var PRAMartService = (function () {
   }
 
   function outputHash(kpis, sales) {
-    return hash([sorted(kpis.map(function (row) { return row.slice(0, 7); })),
-      sorted(sales.map(function (row) { return row.slice(0, 9); }))]);
+    // Sheets may return numeric identifiers and typed dates after setValues.
+    // Hash the declared schema types, not the storage representation.
+    return hash([sorted(kpis.map(function (row) {
+      return row.slice(0, 7).map(function (value, col) {
+        return col < 3 ? date(value) : number(value);
+      });
+    })), sorted(sales.map(function (row) {
+      return row.slice(0, 9).map(function (value, col) {
+        return col === 1 ? date(value) : (col < 6 ? text(value) : number(value));
+      });
+    }))]);
   }
   return Object.freeze({ prepare: prepare, buildDay: buildDay, hash: hash,
     outputHash: outputHash, date: date, text: text, fail: fail, sorted: sorted });
