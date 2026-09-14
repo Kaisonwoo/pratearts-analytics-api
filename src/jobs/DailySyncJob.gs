@@ -31,7 +31,7 @@ var PRADailySyncJob = (function () {
     ].indexOf(String(result.code || '')) >= 0;
   }
 
-  function run(options) {
+  function runWithLease_(options) {
     options = options || {};
     var policy = PRAConfig.getRequestPolicy();
     var executionBudgetMs = Number(options.maxRuntimeMs || policy.executionBudgetMs || 270000);
@@ -150,6 +150,34 @@ var PRADailySyncJob = (function () {
       continuationScheduled: result.continuationScheduled
     });
     return result;
+  }
+
+  function run(options) {
+    options = options || {};
+    var policy = PRAConfig.getRequestPolicy();
+    var executionBudgetMs = Number(options.maxRuntimeMs || policy.executionBudgetMs || 270000);
+    var leaseTtlMs = Math.min(600000, Math.max(60000, executionBudgetMs + 60000));
+    var lease = PRAExecutionLease.acquire('daily_sync', leaseTtlMs);
+    if (!lease.acquired) {
+      var busy = {
+        ok: false,
+        status: 'blocked',
+        code: 'daily_sync_execution_in_progress',
+        retryAfter: new Date(lease.expiresAt).toISOString(),
+        pending: null,
+        continuationScheduled: false,
+        updatedAt: new Date().toISOString()
+      };
+      PRALogger.info('daily_sync_concurrent_execution_blocked', {
+        retryAfter: busy.retryAfter
+      });
+      return busy;
+    }
+    try {
+      return runWithLease_(options);
+    } finally {
+      PRAExecutionLease.release(lease);
+    }
   }
 
   return Object.freeze({ run: run });

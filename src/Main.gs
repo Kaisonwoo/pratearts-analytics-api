@@ -50,6 +50,21 @@ function runDailySyncContinuation() {
   return PRADailySyncJob.run({ replaceContinuation: true });
 }
 
+/** Instala ou reconcilia o acionador diario configurado para runDailySync. */
+function installDailySyncTrigger() {
+  return PRADailyTriggerScheduler.install();
+}
+
+/** Retorna somente metadados publicos da agenda diaria. */
+function getDailySyncTriggerStatus() {
+  return PRADailyTriggerScheduler.status();
+}
+
+/** Remove apenas os acionadores recorrentes de runDailySync. */
+function removeDailySyncTrigger() {
+  return PRADailyTriggerScheduler.remove();
+}
+
 /**
  * Executa ou retoma manualmente a sincronização incremental de pedidos.
  * @param {boolean} reset Reinicia o checkpoint incremental quando true.

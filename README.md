@@ -6,9 +6,9 @@ Integração analítica para transformar dados operacionais do Bling em relatór
 
 Os Sprints 0, 1 e 2 foram concluídos. Normalização, venda válida, fornecedores,
 KPIs e marts diários foram integrados e homologados no ambiente real até PRA-30 /
-PRA-63. O trabalho atual inicia o Sprint 4 com o contrato previsível da API de
-relatórios (PRA-29 / PRA-61) e um painel HTML administrativo para homologação.
-A API final e o dashboard publicado ainda dependem de integração, deploy e aceite.
+PRA-63. O contrato de relatórios e o painel administrativo de PRA-29 / PRA-61
+estão integrados e publicados a partir de `main@f5176cb`. O trabalho atual inicia
+PRA-36 / PRA-71 para instalar uma agenda diária única, retomável e observável.
 
 ## Decisões do MVP
 
@@ -111,6 +111,10 @@ e construção incremental dos marts.
 Quando o orçamento seguro se encerra, o Apps Script agenda uma única continuação
 por `runDailySyncContinuation()`.
 
+O acionador recorrente de `runDailySync()` é instalado e reconciliado por
+`installDailySyncTrigger()`. O contrato, o diagnóstico e o rollback estão em
+[`docs/daily-automation.md`](docs/daily-automation.md).
+
 O contrato de agrupamento, recuperação e implantação dos marts está em
 [`docs/marts.md`](docs/marts.md). O envelope da API, os filtros e a interface
 de homologação estão em [`docs/reporting-dashboard.md`](docs/reporting-dashboard.md).
@@ -159,6 +163,7 @@ Esse comando valida a estrutura, o manifesto e padrões comuns de vazamento de s
 - Faturamento, quantidade e ticket médio: PRA-25 / US-021 e PRA-65 / TT-021
 - Marts analíticos incrementais: PRA-30 / US-022 e PRA-63 / TT-022
 - Contrato da API e painel de homologação: PRA-29 / US-024 e PRA-61 / TT-024
+- Automação diária retomável: PRA-36 / US-030 e PRA-71 / TT-030
 
 ## Referências oficiais
 
