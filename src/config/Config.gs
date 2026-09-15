@@ -32,6 +32,7 @@ var PRAConfig = (function () {
     BLING_PRIMARY_SUPPLIER_RULE: 'BLING_PRIMARY_SUPPLIER_RULE',
     BLING_STATUS_ATENDIDO_ID: 'BLING_STATUS_ATENDIDO_ID',
     DATA_SPREADSHEET_ID: 'DATA_SPREADSHEET_ID',
+    ALERT_GOOGLE_CHAT_WEBHOOK_URL: 'ALERT_GOOGLE_CHAT_WEBHOOK_URL',
     SYNC_TIMEZONE: 'SYNC_TIMEZONE',
     SYNC_HOUR: 'SYNC_HOUR'
   });
@@ -61,6 +62,7 @@ var PRAConfig = (function () {
     KEYS.BLING_CLIENT_SECRET,
     KEYS.BLING_ACCESS_TOKEN,
     KEYS.BLING_REFRESH_TOKEN,
+    KEYS.ALERT_GOOGLE_CHAT_WEBHOOK_URL,
     KEYS.BLING_OAUTH_STATE_HASH
   ]);
 
@@ -162,6 +164,7 @@ var PRAConfig = (function () {
     var invalid = [];
     var syncHour = Number(getPublicValue(KEYS.SYNC_HOUR, DEFAULTS.SYNC_HOUR));
     var redirectUri = props.getProperty(KEYS.BLING_REDIRECT_URI);
+    var alertWebhook = props.getProperty(KEYS.ALERT_GOOGLE_CHAT_WEBHOOK_URL);
     var primarySupplierRule = String(getPublicValue(
       KEYS.BLING_PRIMARY_SUPPLIER_RULE,
       DEFAULTS.BLING_PRIMARY_SUPPLIER_RULE
@@ -173,6 +176,9 @@ var PRAConfig = (function () {
     }
     if (redirectUri && redirectUri.indexOf('https://') !== 0) {
       invalid.push(KEYS.BLING_REDIRECT_URI);
+    }
+    if (alertWebhook && alertWebhook.indexOf('https://chat.googleapis.com/') !== 0) {
+      invalid.push(KEYS.ALERT_GOOGLE_CHAT_WEBHOOK_URL);
     }
     if (PRIMARY_SUPPLIER_RULES.indexOf(primarySupplierRule) < 0) {
       invalid.push(KEYS.BLING_PRIMARY_SUPPLIER_RULE);

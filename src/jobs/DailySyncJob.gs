@@ -3,6 +3,69 @@ var PRADailySyncJob = (function () {
 
   var CONTINUATION_HANDLER = 'runDailySyncContinuation';
 
+  function number_(value) {
+    value = Number(value || 0);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  }
+
+  function executionMetrics_(result) {
+    result = result || {};
+    var incremental = result.incremental || {};
+    var reconciliation = result.reconciliation || {};
+    var details = result.details || {};
+    var pages = number_(incremental.pagesFetched) + number_(reconciliation.pagesFetched);
+    var records = number_(details.ordersStored) + number_(details.itemsStored);
+    if (!records) {
+      records = number_(incremental.recordsFetched) + number_(reconciliation.recordsFetched);
+    }
+    return { pagesProcessed: pages, recordsProcessed: records };
+  }
+
+  function firstCorrelationId_(value) {
+    if (!value || typeof value !== 'object') return '';
+    if (value.correlationId) return String(value.correlationId);
+    var keys = Object.keys(value);
+    for (var index = 0; index < keys.length; index += 1) {
+      var nested = firstCorrelationId_(value[keys[index]]);
+      if (nested) return nested;
+    }
+    return '';
+  }
+
+  function recordStart_(entry) {
+    try {
+      PRASyncRunStore.start(entry);
+    } catch (error) {
+      PRALogger.error('sync_run_start_persistence_failed', {
+        runId: entry.runId,
+        correlationId: entry.correlationId
+      });
+    }
+  }
+
+  function recordFinish_(entry) {
+    try {
+      PRASyncRunStore.finish(entry);
+    } catch (error) {
+      PRALogger.error('sync_run_finish_persistence_failed', {
+        runId: entry.runId,
+        correlationId: entry.correlationId
+      });
+    }
+  }
+
+  function alertBlocked_(entry) {
+    try {
+      return PRAAlertService.notifyCritical(entry);
+    } catch (error) {
+      PRALogger.error('critical_alert_unexpected_failure', {
+        code: entry.code,
+        correlationId: entry.correlationId
+      });
+      return { configured: null, delivered: false, code: 'alert_internal_failure' };
+    }
+  }
+
   function schedule_(shouldContinue, options) {
     if (options.scheduleContinuation === false ||
         typeof PRAContinuationScheduler === 'undefined') {
@@ -173,8 +236,70 @@ var PRADailySyncJob = (function () {
       });
       return busy;
     }
+    var runId = Utilities.getUuid();
+    var startedAtMs = Date.now();
+    var startedAt = new Date(startedAtMs).toISOString();
+    recordStart_({
+      runId: runId,
+      jobName: 'daily_sync',
+      startedAt: startedAt,
+      correlationId: runId
+    });
     try {
-      return runWithLease_(options);
+      var result = runWithLease_(options);
+      var finishedAt = new Date().toISOString();
+      var metrics = executionMetrics_(result);
+      var correlationId = firstCorrelationId_(result) || runId;
+      result.runId = runId;
+      result.correlationId = correlationId;
+      result.startedAt = startedAt;
+      result.finishedAt = finishedAt;
+      result.durationMs = Math.max(0, Date.now() - startedAtMs);
+      result.pagesProcessed = metrics.pagesProcessed;
+      result.recordsProcessed = metrics.recordsProcessed;
+      recordFinish_({
+        runId: runId,
+        jobName: 'daily_sync',
+        status: result.status,
+        startedAt: startedAt,
+        finishedAt: finishedAt,
+        durationMs: result.durationMs,
+        pagesProcessed: metrics.pagesProcessed,
+        recordsProcessed: metrics.recordsProcessed,
+        errorCode: result.ok ? '' : result.code,
+        correlationId: correlationId
+      });
+      if (!result.ok && result.status === 'blocked') {
+        result.alert = alertBlocked_({
+          jobName: 'daily_sync',
+          code: result.code,
+          correlationId: correlationId,
+          timestamp: finishedAt
+        });
+      }
+      return result;
+    } catch (error) {
+      var failureFinishedAt = new Date().toISOString();
+      var failureCode = String(error && error.code || 'daily_sync_unexpected_failure');
+      recordFinish_({
+        runId: runId,
+        jobName: 'daily_sync',
+        status: 'failed',
+        startedAt: startedAt,
+        finishedAt: failureFinishedAt,
+        durationMs: Math.max(0, Date.now() - startedAtMs),
+        pagesProcessed: 0,
+        recordsProcessed: 0,
+        errorCode: failureCode,
+        correlationId: runId
+      });
+      alertBlocked_({
+        jobName: 'daily_sync',
+        code: failureCode,
+        correlationId: runId,
+        timestamp: failureFinishedAt
+      });
+      throw error;
     } finally {
       PRAExecutionLease.release(lease);
     }

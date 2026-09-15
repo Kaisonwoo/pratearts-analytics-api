@@ -33,6 +33,7 @@ test('exemplo de Script Properties documenta OAuth sem valores sensíveis', asyn
     assert.equal(example[key], '');
   }
   assert.equal(example.BLING_REDIRECT_URI, '');
+  assert.equal(example.ALERT_GOOGLE_CHAT_WEBHOOK_URL, '');
 });
 
 test('.gitignore protege credenciais e configuração local', async () => {
@@ -66,7 +67,8 @@ test('diagnóstico público não expõe credenciais ou tokens', async () => {
   const values = new Map([
     ['BLING_CLIENT_ID', 'client-id-de-teste'],
     ['BLING_CLIENT_SECRET', 'client-secret-de-teste'],
-    ['BLING_REDIRECT_URI', 'https://script.google.com/macros/s/teste/exec']
+    ['BLING_REDIRECT_URI', 'https://script.google.com/macros/s/teste/exec'],
+    ['ALERT_GOOGLE_CHAT_WEBHOOK_URL', 'https://chat.googleapis.com/v1/spaces/test/messages?key=secret']
   ]);
   const lockEvents = [];
   const scriptProperties = {
@@ -110,6 +112,9 @@ test('diagnóstico público não expõe credenciais ou tokens', async () => {
   assert.doesNotMatch(serializedPublicSnapshot, /client-secret-de-teste/);
   assert.doesNotMatch(serializedPublicSnapshot, /access-token-de-teste/);
   assert.doesNotMatch(serializedPublicSnapshot, /refresh-token-de-teste/);
+  assert.doesNotMatch(serializedPublicSnapshot, /chat\.googleapis\.com/);
+  assert.doesNotMatch(serializedPublicSnapshot, /key=secret/);
+  assert.equal(publicSnapshot.configuredProperties.ALERT_GOOGLE_CHAT_WEBHOOK_URL, true);
   assert.equal(publicSnapshot.validation.valid, true);
 });
 
@@ -934,6 +939,12 @@ test('configuração de paginação e resiliência usa padrões seguros e limite
   const invalid = vm.runInContext('PRAConfig.validate()', context);
   assert.equal(invalid.valid, false);
   assert.ok(invalid.invalid.includes('BLING_REQUESTS_PER_SECOND'));
+
+  values.set('BLING_REQUESTS_PER_SECOND', '3');
+  values.set('ALERT_GOOGLE_CHAT_WEBHOOK_URL', 'https://example.com/not-chat');
+  const invalidAlert = vm.runInContext('PRAConfig.validate()', context);
+  assert.equal(invalidAlert.valid, false);
+  assert.ok(invalidAlert.invalid.includes('ALERT_GOOGLE_CHAT_WEBHOOK_URL'));
 });
 
 test('rate limiter compartilha intervalo sob lock e backoff cresce até o teto', async () => {

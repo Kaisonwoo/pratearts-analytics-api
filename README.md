@@ -119,6 +119,12 @@ O acionador recorrente de `runDailySync()` é instalado e reconciliado por
 `installDailySyncTrigger()`. O contrato, o diagnóstico e o rollback estão em
 [`docs/daily-automation.md`](docs/daily-automation.md).
 
+Cada execução adquirida da rotina diária registra início, término, duração,
+volume, estado e correlação segura em `sync_runs`. Falhas bloqueantes tentam
+notificar o Google Chat quando o webhook opcional está configurado. O contrato,
+os limites de segurança e o roteiro de homologação estão em
+[`docs/operational-observability.md`](docs/operational-observability.md).
+
 Na homologação funcional de 14/09/2026, o pipeline processou 446 pedidos e 871
 itens, classificou 439 pedidos válidos, atualizou 2 períodos e 40 linhas de
 produto, e terminou com `periodsRemaining: 0` e
@@ -176,6 +182,7 @@ Esse comando valida a estrutura, o manifesto e padrões comuns de vazamento de s
 - Marts analíticos incrementais: PRA-30 / US-022 e PRA-63 / TT-022
 - Contrato da API e painel de homologação: PRA-29 / US-024 e PRA-61 / TT-024
 - Automação diária retomável: PRA-36 / US-030 e PRA-71 / TT-030
+- Observabilidade e alertas operacionais: PRA-31 / US-031 e TT-031
 
 ## Referências oficiais
 

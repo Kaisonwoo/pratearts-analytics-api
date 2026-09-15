@@ -201,7 +201,7 @@ test('incremental salva checkpoint ao atingir orçamento de tempo', async () => 
 });
 
 test('DailySync orquestra incremental, detalhes, normalizacao e marts', async () => {
-  const queued = [];
+  const queued = [], syncRuns = [], alerts = [];
   const context = vm.createContext({
     PRAConfig: {
       getRequestPolicy: () => ({ executionBudgetMs: 270000 })
@@ -209,7 +209,14 @@ test('DailySync orquestra incremental, detalhes, normalizacao e marts', async ()
     PRAOrdersIncrementalSync: {
       run: (options) => {
         options.onPage([{ id: 7 }], 2, { runId: 'daily-run' });
-        return { ok: true, status: 'completed', code: 'incremental_sync_completed' };
+        return {
+          ok: true,
+          status: 'completed',
+          code: 'incremental_sync_completed',
+          pagesFetched: 1,
+          recordsFetched: 6,
+          correlationId: 'incremental-correlation'
+        };
       }
     },
     PRAOrderDetailsQueue: {
@@ -220,7 +227,14 @@ test('DailySync orquestra incremental, detalhes, normalizacao e marts', async ()
       run: () => ({ ok: true, status: 'skipped', code: 'reconciliation_not_due' })
     },
     PRAOrderDetailsJob: {
-      run: () => ({ ok: true, status: 'completed', unresolvedErrors: 0, pending: 0 })
+      run: () => ({
+        ok: true,
+        status: 'completed',
+        unresolvedErrors: 0,
+        pending: 0,
+        ordersStored: 6,
+        itemsStored: 24
+      })
     },
     PRAOrdersAnalyticsPipeline: {
       run: () => ({ ok: true, status: 'completed', code: 'orders_analytics_completed' })
@@ -231,6 +245,17 @@ test('DailySync orquestra incremental, detalhes, normalizacao e marts', async ()
     PRAExecutionLease: {
       acquire: () => ({ acquired: true, key: 'daily', token: 'one' }),
       release: () => true
+    },
+    Utilities: { getUuid: () => 'daily-observability-run' },
+    PRASyncRunStore: {
+      start: entry => syncRuns.push({ phase: 'start', entry }),
+      finish: entry => syncRuns.push({ phase: 'finish', entry })
+    },
+    PRAAlertService: {
+      notifyCritical: entry => {
+        alerts.push(entry);
+        return { configured: false, delivered: false, code: 'alert_not_configured' };
+      }
     },
     PRALogger: { info: () => {} },
     Date,
@@ -255,11 +280,67 @@ test('DailySync orquestra incremental, detalhes, normalizacao e marts', async ()
   assert.equal(queued.length, 1);
   assert.equal(queued[0].page, 2);
   assert.equal(queued[0].metadata.runId, 'daily-run');
+  assert.equal(result.runId, 'daily-observability-run');
+  assert.equal(result.correlationId, 'incremental-correlation');
+  assert.equal(result.pagesProcessed, 1);
+  assert.equal(result.recordsProcessed, 30);
+  assert.equal(syncRuns.length, 2);
+  assert.equal(syncRuns[0].phase, 'start');
+  assert.equal(syncRuns[0].entry.runId, 'daily-observability-run');
+  assert.equal(syncRuns[1].phase, 'finish');
+  assert.equal(syncRuns[1].entry.status, 'completed');
+  assert.equal(syncRuns[1].entry.pagesProcessed, 1);
+  assert.equal(syncRuns[1].entry.recordsProcessed, 30);
+  assert.equal(alerts.length, 0);
+});
+
+test('DailySync registra, alerta e relança falha inesperada', async () => {
+  const syncRuns = [], alerts = [], releases = [];
+  const failure = new Error('falha interna de teste');
+  failure.code = 'incremental_unexpected_failure';
+  const context = vm.createContext({
+    PRAConfig: { getRequestPolicy: () => ({ executionBudgetMs: 270000 }) },
+    PRAOrdersIncrementalSync: { run: () => { throw failure; } },
+    PRAExecutionLease: {
+      acquire: () => ({ acquired: true, key: 'daily', token: 'one' }),
+      release: lease => releases.push(lease)
+    },
+    Utilities: { getUuid: () => 'daily-failure-run' },
+    PRASyncRunStore: {
+      start: entry => syncRuns.push({ phase: 'start', entry }),
+      finish: entry => syncRuns.push({ phase: 'finish', entry })
+    },
+    PRAAlertService: {
+      notifyCritical: entry => {
+        alerts.push(entry);
+        return { configured: true, delivered: true, code: 'alert_delivered' };
+      }
+    },
+    PRALogger: { info() {}, error() {} },
+    Date, Number, Boolean, Object, Math
+  });
+  vm.runInContext(
+    await readFile(path.join(root, 'src/core/RuntimeBudget.gs'), 'utf8'),
+    context,
+    { filename: 'src/core/RuntimeBudget.gs' }
+  );
+  await load(context, 'DailySyncJob.gs');
+
+  assert.throws(() => context.PRADailySyncJob.run(), /falha interna de teste/);
+  assert.equal(syncRuns.length, 2);
+  assert.equal(syncRuns[1].phase, 'finish');
+  assert.equal(syncRuns[1].entry.status, 'failed');
+  assert.equal(syncRuns[1].entry.errorCode, 'incremental_unexpected_failure');
+  assert.equal(syncRuns[1].entry.correlationId, 'daily-failure-run');
+  assert.equal(alerts.length, 1);
+  assert.equal(alerts[0].code, 'incremental_unexpected_failure');
+  assert.equal(alerts[0].correlationId, 'daily-failure-run');
+  assert.equal(releases.length, 1);
 });
 
 for (const martStatus of ['completed', 'in_progress', 'blocked']) {
   test(`DailySync respeita resultado ${martStatus} dos marts e compartilha prazo`, async () => {
-    const calls = [], schedules = [];
+    const calls = [], schedules = [], alerts = [];
     const context = vm.createContext({
       PRAConfig: { getRequestPolicy: () => ({ executionBudgetMs: 270000 }) },
       PRAOrdersIncrementalSync: { run: options => {
@@ -287,6 +368,14 @@ for (const martStatus of ['completed', 'in_progress', 'blocked']) {
         acquire: () => ({ acquired: true, key: 'daily', token: 'one' }),
         release: () => true
       },
+      Utilities: { getUuid: () => 'daily-observability-run' },
+      PRASyncRunStore: { start() {}, finish() {} },
+      PRAAlertService: {
+        notifyCritical: entry => {
+          alerts.push(entry);
+          return { configured: false, delivered: false, code: 'alert_not_configured' };
+        }
+      },
       PRALogger: { info() {}, error() {} }
     });
     vm.runInContext(await readFile(path.join(root, 'src/core/RuntimeBudget.gs'), 'utf8'), context);
@@ -298,6 +387,11 @@ for (const martStatus of ['completed', 'in_progress', 'blocked']) {
     assert.equal(new Set(calls.map(call => call[1].deadlineAtMs)).size, 1);
     assert.equal(calls.at(-1)[1].scheduleContinuation, false);
     assert.deepEqual(schedules, martStatus === 'in_progress' ? ['runDailySyncContinuation'] : []);
+    assert.equal(alerts.length, martStatus === 'blocked' ? 1 : 0);
+    if (martStatus === 'blocked') {
+      assert.equal(alerts[0].code, 'daily_sync_blocked');
+      assert.equal(result.alert.code, 'alert_not_configured');
+    }
   });
 }
 
@@ -332,6 +426,11 @@ test('DailySync bloqueia normalização quando existem erros de detalhe não res
     PRAExecutionLease: {
       acquire: () => ({ acquired: true, key: 'daily', token: 'one' }),
       release: () => true
+    },
+    Utilities: { getUuid: () => 'daily-observability-run' },
+    PRASyncRunStore: { start() {}, finish() {} },
+    PRAAlertService: {
+      notifyCritical: () => ({ configured: false, delivered: false, code: 'alert_not_configured' })
     },
     PRALogger: { info() {}, error() {} },
     Date, Number, Boolean, Object, Math

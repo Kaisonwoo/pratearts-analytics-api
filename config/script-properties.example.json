@@ -17,6 +17,7 @@
   "BLING_PRIMARY_SUPPLIER_RULE": "marked_default",
   "BLING_STATUS_ATENDIDO_ID": "",
   "DATA_SPREADSHEET_ID": "",
+  "ALERT_GOOGLE_CHAT_WEBHOOK_URL": "",
   "SYNC_TIMEZONE": "America/Sao_Paulo",
   "SYNC_HOUR": "6"
 }
