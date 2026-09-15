@@ -69,6 +69,36 @@ o mesmo lease do job diário e substitui somente o próprio acionador temporári
 7. confirmar no dashboard um único handler `runDailySync`;
 8. acompanhar a primeira execução e qualquer continuação até o status final.
 
+### Evidência operacional de 14/09/2026
+
+A implantação de `main@a3e60c6` foi validada com 137 testes aprovados e um único
+acionador recorrente de `runDailySync` instalado. Uma execução funcional
+controlada concluiu o pipeline completo com os seguintes resultados:
+
+| Evidência | Resultado |
+|---|---:|
+| Pedidos lidos e normalizados | 446 |
+| Itens lidos e normalizados | 871 |
+| Pedidos válidos | 439 |
+| Pedidos excluídos | 7 |
+| Períodos regravados nos marts | 2 |
+| Linhas de produto regravadas | 40 |
+| Erros de detalhe | 0 |
+| Erros de faturamento por item | 0 |
+| Erros de qualidade da execução | 0 |
+| Períodos pendentes ao final | 0 |
+
+O evento final foi `daily_sync_finished` com `ok: true`, código
+`daily_sync_completed`, `pending: 0` e `continuationScheduled: false`. As
+chamadas de detalhe do Bling observadas responderam com HTTP 200.
+
+Essa evidência homologa o handler, o pipeline, a persistência e a instalação da
+agenda. Ela ainda não comprova o primeiro disparo iniciado automaticamente pelo
+relógio: na captura da página de acionadores, a coluna de última execução
+permanecia `-`. Também não comprova qual versão está ativa na implantação
+pública `/exec` do Web App. Esses dois itens devem continuar em monitoramento e
+ser registrados separadamente, sem bloquear a homologação funcional já obtida.
+
 ## Rollback
 
 Execute `removeDailySyncTrigger()`. O retorno deve indicar quantos acionadores
