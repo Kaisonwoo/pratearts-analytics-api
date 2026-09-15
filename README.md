@@ -7,8 +7,12 @@ Integração analítica para transformar dados operacionais do Bling em relatór
 Os Sprints 0, 1 e 2 foram concluídos. Normalização, venda válida, fornecedores,
 KPIs e marts diários foram integrados e homologados no ambiente real até PRA-30 /
 PRA-63. O contrato de relatórios e o painel administrativo de PRA-29 / PRA-61
-estão integrados e publicados a partir de `main@f5176cb`. O trabalho atual inicia
-PRA-36 / PRA-71 para instalar uma agenda diária única, retomável e observável.
+estão integrados desde `main@f5176cb`. A automação diária retomável de PRA-36 /
+PRA-71 foi integrada em `main@a3e60c6`, implantada e homologada funcionalmente:
+há um único acionador de `runDailySync` e uma execução controlada terminou com
+`daily_sync_completed`, sem pendências nem continuação agendada. O primeiro
+disparo efetivamente iniciado pelo relógio e a versão pública atual do Web App
+permanecem como verificações operacionais abertas.
 
 ## Decisões do MVP
 
@@ -114,6 +118,14 @@ por `runDailySyncContinuation()`.
 O acionador recorrente de `runDailySync()` é instalado e reconciliado por
 `installDailySyncTrigger()`. O contrato, o diagnóstico e o rollback estão em
 [`docs/daily-automation.md`](docs/daily-automation.md).
+
+Na homologação funcional de 14/09/2026, o pipeline processou 446 pedidos e 871
+itens, classificou 439 pedidos válidos, atualizou 2 períodos e 40 linhas de
+produto, e terminou com `periodsRemaining: 0` e
+`continuationScheduled: false`. A página de acionadores confirmou exatamente
+uma agenda recorrente instalada; naquele registro, porém, a coluna de última
+execução ainda estava vazia, portanto a primeira ativação automática pelo
+relógio não deve ser considerada comprovada.
 
 O contrato de agrupamento, recuperação e implantação dos marts está em
 [`docs/marts.md`](docs/marts.md). O envelope da API, os filtros e a interface
