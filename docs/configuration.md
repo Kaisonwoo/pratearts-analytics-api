@@ -33,6 +33,7 @@
 | `BLING_LAST_SUCCESS_CORRELATION_ID` | Gerenciada | Não | Identificador seguro da última chamada mínima bem-sucedida. |
 | `BLING_STATUS_ATENDIDO_ID` | Antes da coleta | Não | ID técnico da situação válida de venda. |
 | `DATA_SPREADSHEET_ID` | Antes da persistência | Não | Identifica a base de dados do MVP. |
+| `ALERT_GOOGLE_CHAT_WEBHOOK_URL` | Não | Sim | Webhook do Google Chat usado apenas para falhas críticas da rotina diária. Quando ausente, a falha continua registrada em `sync_runs`. |
 | `BLING_MAX_ORDER_DETAILS_PER_RUN` | Antes da coleta de detalhes | Não | Limita pedidos detalhados por execução; padrão 20, máximo 100. |
 | `BLING_EXECUTION_BUDGET_MS` | Não | Não | Orçamento compartilhado por execução, de 60000 a 330000 ms; padrão: `270000`. |
 | `BLING_ORDER_DETAILS_QUEUE_INDEX` | Gerenciada | Não | Índice interno da fila fragmentada; contém somente contagens e chaves técnicas. |
@@ -91,6 +92,10 @@ O health check diferencia três estados operacionais:
 O retorno inclui horário, `correlationId` e o último acesso bem-sucedido, além dos indicadores públicos de configuração e presença dos tokens.
 
 Ele nunca retorna Client ID, Client Secret, access token ou refresh token.
+
+O webhook de alerta também é tratado como segredo: configure-o somente em
+Script Properties. O valor nunca aparece em respostas, planilhas ou logs; o
+snapshot público informa apenas se a propriedade está presente.
 
 O contrato e a validação manual estão em [`connectivity-health.md`](connectivity-health.md).
 O passo a passo completo de implantação e primeira autorização está em [`oauth-authorization.md`](oauth-authorization.md).

@@ -41,6 +41,10 @@ var PRASecrets = (function () {
     };
   }
 
+  function getGoogleChatAlertWebhook() {
+    return properties_().getProperty(PRAConfig.KEYS.ALERT_GOOGLE_CHAT_WEBHOOK_URL);
+  }
+
   function getTokenSnapshot() {
     var props = properties_();
     return {
@@ -212,6 +216,7 @@ var PRASecrets = (function () {
 
   return Object.freeze({
     getClientCredentials: getClientCredentials,
+    getGoogleChatAlertWebhook: getGoogleChatAlertWebhook,
     getTokenSnapshot: getTokenSnapshot,
     getTokenStatus: getTokenStatus,
     hasUsableAccessToken: hasUsableAccessToken,

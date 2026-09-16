@@ -42,6 +42,11 @@ O esquema 3 de PRA-30/PRA-63 acrescenta o estado de integridade dos marts por
 período. Há 15 abas de dados/controle e `_schema_registry` (16 ao todo).
 Reexecute o provisionamento antes da primeira construção dos marts.
 
+Cada execução adquirida de `runDailySync()` grava uma linha em `sync_runs` ao
+iniciar e a atualiza ao terminar. O registro mantém somente identificadores
+técnicos, status, horários, duração, páginas, registros, código de erro e
+`correlation_id`. O histórico é limitado às 500 execuções mais recentes.
+
 Se uma aba já existente tiver cabeçalho incompatível, a rotina falha sem substituir os dados. Isso evita que uma mudança de versão altere silenciosamente dados já persistidos.
 
 ## Limites desta história
