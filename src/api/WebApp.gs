@@ -68,6 +68,29 @@ function jsonOutput_(payload) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+function csvOutput_(parameters) {
+  var resource = String(parameters.resource || '').toLowerCase();
+  if (['kpis', 'trend', 'products', 'variations', 'suppliers'].indexOf(resource) < 0) {
+    if (resource !== 'dashboard' && resource !== 'health') {
+      return jsonOutput_(routeApiRequest_(parameters));
+    }
+    return jsonOutput_(PRAReportService.errorEnvelope(
+      'report_export_unsupported', 'Este recurso não oferece exportação CSV.', parameters
+    ));
+  }
+  var envelope = PRAReportService.executeResource(resource, parameters);
+  if (envelope.errors.length) return jsonOutput_(envelope);
+  try {
+    return ContentService.createTextOutput(PRAReportCsvService.serialize(resource, envelope.data))
+      .setMimeType(ContentService.MimeType.CSV)
+      .downloadAsFile('pratearts-' + resource + '.csv');
+  } catch (error) {
+    return jsonOutput_(PRAReportService.errorEnvelope(
+      'report_internal_error', 'Não foi possível exportar os indicadores.', parameters
+    ));
+  }
+}
+
 function routeApiRequest_(parameters) {
   var resource = String(parameters.resource || '').toLowerCase();
   if (resource === 'health') {
@@ -108,11 +131,18 @@ function doGet(event) {
   if (parameters.code || parameters.error || parameters.state) {
     return renderAuthorizationCallback_(parameters);
   }
+  if (parameters.resource) {
+    var format = String(parameters.format || 'json').toLowerCase();
+    if (format !== 'json' && format !== 'csv') {
+      return jsonOutput_(PRAReportService.errorEnvelope(
+        'report_invalid_format', 'Use o formato json ou csv.', parameters
+      ));
+    }
+    if (format === 'csv') return csvOutput_(parameters);
+    return jsonOutput_(routeApiRequest_(parameters));
+  }
   if (parameters.view === 'dashboard') {
     return renderDashboardPage_();
-  }
-  if (parameters.resource) {
-    return jsonOutput_(routeApiRequest_(parameters));
   }
   return jsonOutput_(PRAHealthService.getStatus());
 }

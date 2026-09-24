@@ -56,8 +56,21 @@ com `supplierId: null`. Itens sem ID entram nos totais, mas não na contagem de
 produtos conhecidos. A atribuição é a atual, nunca histórica.
 
 As novas rotas devolvem o mesmo envelope v1 e preservam o recurso `dashboard`.
-Elas não exportam CSV nesta etapa; exportação e homologação do Web App são
-entregas separadas.
+Com `format=csv`, cada recurso especializado devolve apenas suas colunas agregadas
+em UTF-8 com BOM, separador vírgula e linhas CRLF. O nome sugerido é
+`pratearts-<resource>.csv`; alguns navegadores podem ignorar a sugestão de
+download do Apps Script. Erros continuam em JSON. O recurso `dashboard` e a rota
+`health` não oferecem CSV. O padrão, sem `format`, continua JSON. Quando
+`resource` e `view` aparecem juntos, `resource` seleciona a API e `view` é
+validado como filtro, sem transformar a resposta em HTML.
+
+Campos de texto são delimitados por aspas, têm aspas internas duplicadas e
+controles de linha substituídos por espaços. Textos que poderiam ser
+interpretados como fórmulas recebem uma tabulação dentro da célula citada;
+ela permanece no valor em importações programáticas. Números legítimos,
+inclusive negativos, mantêm seu tipo. Esta exportação é para leitura em
+planilhas, não para intercâmbio de dados tipados sem transformação. A
+homologação do Web App permanece uma entrega separada.
 
 ## Envelope v1
 
@@ -91,6 +104,13 @@ Toda rota nova responde com as quatro propriedades abaixo, inclusive em falha:
 - `operations`: último cálculo, última sincronização segura e triggers;
 - `meta.runtime`: revisão e hash do pacote gerado.
 
+O período e o fornecedor selecionados afetam KPIs, série e ranking conforme as
+regras acima. `quality` resume o histórico completo de exceções e janelas;
+`operations` mostra o estado atual do projeto. Ambos são independentes dos
+filtros do relatório. O painel apresenta o estado e o horário da última linha
+de `sync_runs`; uma execução bloqueada ou falha aparece em destaque sem expor
+o identificador de correlação nem dados individuais.
+
 Nas rotas especializadas, `data` contém apenas a chave do recurso solicitado:
 `kpis`, `trend`, `products`, `variations` ou `suppliers`. O dashboard mantém
 `rankings`, `quality` e `operations` no mesmo envelope.
@@ -110,6 +130,8 @@ uma média simples dos tickets diários.
 | `report_invalid_supplier` | Fornecedor inválido |
 | `report_invalid_limit` | Limite fora de 1–50 |
 | `report_filter_unsupported` | Filtro de ranking informado para KPI ou série |
+| `report_invalid_format` | Formato diferente de `json` ou `csv` |
+| `report_export_unsupported` | CSV solicitado para recurso sem exportação |
 | `report_source_busy` | Job de escrita mantém o lock |
 | `report_source_unavailable` | Aba analítica ausente |
 | `report_schema_mismatch` | Cabeçalho incompatível |
