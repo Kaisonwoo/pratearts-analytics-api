@@ -406,6 +406,10 @@
         <button class="apply" id="applyButton" type="submit">Aplicar filtros</button>
       </form>
 
+      <div class="notice" id="supplierScopeNotice" role="status">
+        O fornecedor filtra apenas o ranking. Os KPIs e a série mostram todos os fornecedores no período.
+      </div>
+
       <section class="metrics" id="overview" aria-label="Indicadores principais">
         <article class="metric accent">
           <span class="metric-label">Faturamento</span>
@@ -623,6 +627,7 @@
         var data = envelope.data;
         var meta = envelope.meta || {};
         var filters = envelope.filtersApplied || {};
+        document.getElementById('supplierScopeNotice').classList.toggle('visible', Boolean(filters.supplierId));
         var kpis = data.kpis || {};
         document.getElementById('revenueValue').textContent = currency(kpis.revenue);
         document.getElementById('ordersValue').textContent = integer(kpis.validOrders);

@@ -76,6 +76,9 @@ function routeApiRequest_(parameters) {
   if (resource === 'dashboard') {
     return PRAReportService.execute(parameters);
   }
+  if (['kpis', 'trend', 'products', 'variations', 'suppliers'].indexOf(resource) >= 0) {
+    return PRAReportService.executeResource(resource, parameters);
+  }
   return {
     data: null,
     meta: {

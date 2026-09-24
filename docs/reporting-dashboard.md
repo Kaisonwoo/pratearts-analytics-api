@@ -20,6 +20,11 @@ nem altera a implantação ativa automaticamente.
 | `?view=dashboard` | Renderiza `Index.html` | Nova |
 | `?resource=health` | Saúde no envelope v1 | Nova |
 | `?resource=dashboard` | Indicadores no envelope v1 | Nova |
+| `?resource=kpis` | Totais confirmados do período | Incremento de leitura |
+| `?resource=trend` | Série diária confirmada | Incremento de leitura |
+| `?resource=products` | Ranking por produto ou família | Incremento de leitura |
+| `?resource=variations` | Ranking das variações conhecidas | Incremento de leitura |
+| `?resource=suppliers` | Ranking por fornecedor atual | Incremento de leitura |
 | `getDashboardSnapshot(filters)` | Bridge do HTML | Nova |
 
 Filtros aceitos pelo recurso `dashboard`:
@@ -33,6 +38,26 @@ Filtros aceitos pelo recurso `dashboard`:
 | `limit` | Inteiro de 1 a 50; padrão 10 |
 
 O intervalo é inclusivo e limitado a 366 dias.
+No recurso `dashboard`, `supplierId` filtra somente o ranking; os KPIs e a
+série continuam mostrando os totais gerais do período. O painel informa essa
+distinção quando o filtro é aplicado.
+
+Os recursos `kpis` e `trend` aceitam somente o período: o mart de KPIs não
+contém um total de pedidos distintos por fornecedor. `supplierId`, `view` e
+`limit` são recusados com `report_filter_unsupported`. O recurso `products`
+aceita todos os filtros acima. `variations` e `suppliers` exigem
+`view=product` (padrão) para
+evitar a duplicação da visão de famílias. Eles aceitam período, fornecedor e
+limite. Uma variação é identificada por `stg_products.is_variation`; itens de
+produto desconhecido não são adivinhados como variação. `suppliers` devolve
+`supplierId`, quantidade, faturamento e `knownProductsCount` (IDs conhecidos
+distintos), sem somar `orders_count` de produtos diferentes. Fornecedor sem vínculo aparece
+com `supplierId: null`. Itens sem ID entram nos totais, mas não na contagem de
+produtos conhecidos. A atribuição é a atual, nunca histórica.
+
+As novas rotas devolvem o mesmo envelope v1 e preservam o recurso `dashboard`.
+Elas não exportam CSV nesta etapa; exportação e homologação do Web App são
+entregas separadas.
 
 ## Envelope v1
 
@@ -66,6 +91,10 @@ Toda rota nova responde com as quatro propriedades abaixo, inclusive em falha:
 - `operations`: último cálculo, última sincronização segura e triggers;
 - `meta.runtime`: revisão e hash do pacote gerado.
 
+Nas rotas especializadas, `data` contém apenas a chave do recurso solicitado:
+`kpis`, `trend`, `products`, `variations` ou `suppliers`. O dashboard mantém
+`rankings`, `quality` e `operations` no mesmo envelope.
+
 O ticket médio do intervalo é `faturamento total / pedidos válidos totais`, não
 uma média simples dos tickets diários.
 
@@ -80,6 +109,7 @@ uma média simples dos tickets diários.
 | `report_invalid_view` | Visão diferente de `product`/`parent` |
 | `report_invalid_supplier` | Fornecedor inválido |
 | `report_invalid_limit` | Limite fora de 1–50 |
+| `report_filter_unsupported` | Filtro de ranking informado para KPI ou série |
 | `report_source_busy` | Job de escrita mantém o lock |
 | `report_source_unavailable` | Aba analítica ausente |
 | `report_schema_mismatch` | Cabeçalho incompatível |

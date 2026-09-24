@@ -34,7 +34,8 @@ var PRAReportService = (function () {
   }
 
   function validDate_(value, code) {
-    var candidate = isoDate_(value);
+    var candidate = Object.prototype.toString.call(value) === '[object Date]'
+      ? isoDate_(value) : text_(value);
     var timestamp = Date.parse(candidate + 'T00:00:00Z');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(candidate) || !Number.isFinite(timestamp) ||
         new Date(timestamp).toISOString().slice(0, 10) !== candidate) {
@@ -230,6 +231,58 @@ var PRAReportService = (function () {
     });
   }
 
+  function buildVariations_(rows, products, filters) {
+    var variations = products.reduce(function (result, product) {
+      if (String(product.is_variation).toLowerCase() === 'true') {
+        result[text_(product.product_id)] = true;
+      }
+      return result;
+    }, Object.create(null));
+    return buildRankings_(rows.filter(function (row) {
+      return variations[text_(row.product_id)];
+    }), products, filters);
+  }
+
+  function buildSuppliers_(rows, filters) {
+    var groups = Object.create(null);
+    rows.forEach(function (row) {
+      // The parent view duplicates the product view for reporting purposes.
+      if (text_(row.mart_key).indexOf('product:') !== 0) return;
+      var supplierId = text_(row.supplier_id);
+      if (filters.supplierId && supplierId !== filters.supplierId) return;
+      var key = supplierId || '__unassigned__';
+      if (!groups[key]) {
+        groups[key] = {
+          position: 0,
+          supplierId: supplierId || null,
+          knownProductsCount: 0,
+          quantity: 0,
+          revenue: 0,
+          products: Object.create(null)
+        };
+      }
+      var group = groups[key];
+      var productId = text_(row.product_id);
+      if (productId) group.products[productId] = true;
+      group.quantity += number_(row.quantity);
+      group.revenue += number_(row.revenue);
+    });
+    return Object.keys(groups).map(function (key) {
+      var group = groups[key];
+      group.knownProductsCount = Object.keys(group.products).length;
+      group.quantity = Math.round(group.quantity * 1000000) / 1000000;
+      group.revenue = money_(group.revenue);
+      delete group.products;
+      return group;
+    }).sort(function (a, b) {
+      return b.revenue - a.revenue || b.quantity - a.quantity ||
+        String(a.supplierId || '').localeCompare(String(b.supplierId || ''));
+    }).slice(0, filters.limit).map(function (row, index) {
+      row.position = index + 1;
+      return row;
+    });
+  }
+
   function groupCounts_(rows, field, fallback) {
     var counts = rows.reduce(function (result, row) {
       var key = text_(row[field]) || fallback;
@@ -326,7 +379,14 @@ var PRAReportService = (function () {
     };
   }
 
-  function execute(filters) {
+  function appliedFiltersFor_(filters, resource) {
+    if (resource === 'kpis' || resource === 'trend') {
+      return { startDate: filters.startDate, endDate: filters.endDate };
+    }
+    return filters;
+  }
+
+  function executeInternal_(filters, resource) {
     var lock = LockService.getScriptLock();
     if (!lock.tryLock(LOCK_TIMEOUT_MS)) {
       return errorEnvelope(
@@ -341,25 +401,52 @@ var PRAReportService = (function () {
       var periodState = readTable_(spreadsheet, 'mart_period_state');
       var coverage = coverage_(periodState);
       var applied = parseFilters_(filters, coverage);
-      var kpiRows = readTable_(spreadsheet, 'mart_kpis').filter(function (row) {
+      var requested = filters || {};
+      if ((resource === 'kpis' || resource === 'trend') &&
+          (text_(requested.supplierId || requested.supplier_id) ||
+            text_(requested.view || requested.granularity) || text_(requested.limit))) {
+        fail_('report_filter_unsupported',
+          'Este recurso aceita somente filtros de período.');
+      }
+      if (applied.view !== 'product' &&
+          (resource === 'variations' || resource === 'suppliers')) {
+        fail_('report_invalid_view', 'Esta consulta requer a visualização product.');
+      }
+      var needsKpis = resource === 'dashboard' || resource === 'kpis' || resource === 'trend';
+      var needsSales = resource === 'dashboard' || resource === 'products' ||
+        resource === 'variations' || resource === 'suppliers';
+      var kpiRows = needsKpis ? readTable_(spreadsheet, 'mart_kpis').filter(function (row) {
         return inRange_(row.period_key, applied, coverage.confirmed);
-      });
-      var salesRows = readTable_(spreadsheet, 'mart_product_sales').filter(function (row) {
+      }) : [];
+      var salesRows = needsSales ? readTable_(spreadsheet, 'mart_product_sales').filter(function (row) {
         return inRange_(row.period_key, applied, coverage.confirmed);
-      });
-      var products = readTable_(spreadsheet, 'stg_products');
-      var qualityErrors = readTable_(spreadsheet, 'data_quality_errors');
-      var windows = readTable_(spreadsheet, 'recalc_windows');
-      var syncRuns = readTable_(spreadsheet, 'sync_runs');
-
-      return {
-        data: {
+      }) : [];
+      var products = resource === 'dashboard' || resource === 'products' || resource === 'variations'
+        ? readTable_(spreadsheet, 'stg_products') : [];
+      var data;
+      if (resource === 'dashboard') {
+        data = {
           kpis: buildKpis_(kpiRows),
           trend: buildTrend_(kpiRows),
           rankings: buildRankings_(salesRows, products, applied),
-          quality: buildQuality_(qualityErrors, windows),
-          operations: buildOperations_(syncRuns, periodState)
-        },
+          quality: buildQuality_(readTable_(spreadsheet, 'data_quality_errors'),
+            readTable_(spreadsheet, 'recalc_windows')),
+          operations: buildOperations_(readTable_(spreadsheet, 'sync_runs'), periodState)
+        };
+      } else if (resource === 'kpis') {
+        data = { kpis: buildKpis_(kpiRows) };
+      } else if (resource === 'trend') {
+        data = { trend: buildTrend_(kpiRows) };
+      } else if (resource === 'products') {
+        data = { products: buildRankings_(salesRows, products, applied) };
+      } else if (resource === 'variations') {
+        data = { variations: buildVariations_(salesRows, products, applied) };
+      } else if (resource === 'suppliers') {
+        data = { suppliers: buildSuppliers_(salesRows, applied) };
+      }
+
+      return {
+        data: data,
         meta: {
           contractVersion: CONTRACT_VERSION,
           generatedAt: new Date().toISOString(),
@@ -373,7 +460,7 @@ var PRAReportService = (function () {
           supplierAssignment: 'current_not_historical',
           runtime: runtimeMetadata_()
         },
-        filtersApplied: applied,
+        filtersApplied: appliedFiltersFor_(applied, resource),
         errors: []
       };
     } catch (error) {
@@ -389,8 +476,20 @@ var PRAReportService = (function () {
     }
   }
 
+  function execute(filters) {
+    return executeInternal_(filters, 'dashboard');
+  }
+
+  function executeResource(resource, filters) {
+    if (['kpis', 'trend', 'products', 'variations', 'suppliers'].indexOf(resource) < 0) {
+      return errorEnvelope('report_unknown_resource', 'O recurso solicitado não existe.', filters);
+    }
+    return executeInternal_(filters, resource);
+  }
+
   return Object.freeze({
     execute: execute,
+    executeResource: executeResource,
     errorEnvelope: errorEnvelope
   });
 })();

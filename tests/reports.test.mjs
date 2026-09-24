@@ -52,8 +52,8 @@ async function fixture(options = {}) {
   ]);
   seed('stg_products', [
     { product_id: '100', sku: 'SYN-P', name: 'Família sintética' },
-    { product_id: '101', parent_product_id: '100', sku: 'SYN-A', name: 'Produto sintético A' },
-    { product_id: '102', parent_product_id: '100', sku: 'SYN-B', name: 'Produto sintético B' }
+    { product_id: '101', parent_product_id: '100', sku: 'SYN-A', name: 'Produto sintético A', is_variation: true },
+    { product_id: '102', parent_product_id: '100', sku: 'SYN-B', name: 'Produto sintético B', is_variation: false }
   ]);
   seed('data_quality_errors', [
     { error_key: 'q1', error_code: 'invalid_supplier_id', severity: 'warning', detected_at: '2026-09-10T00:00:00Z' },
@@ -130,6 +130,41 @@ test('relatórios: visão de família e fornecedor são aplicados antes da agreg
   assert.equal(result.filtersApplied.view, 'parent');
 });
 
+test('recursos especializados leem somente períodos confirmados e uma visão de vendas', async () => {
+  const { context } = await fixture();
+  const query = resource => copy(context.PRAReportService.executeResource(resource, {}));
+  const kpis = query('kpis');
+  const trend = query('trend');
+  const products = query('products');
+  const variations = query('variations');
+  const suppliers = query('suppliers');
+
+  assert.deepEqual(kpis.errors, []);
+  assert.equal(kpis.data.kpis.revenue, 25);
+  assert.deepEqual(Object.keys(kpis.filtersApplied), ['startDate', 'endDate']);
+  assert.equal(trend.data.trend.length, 2);
+  assert.deepEqual(products.data.products.map(row => row.revenue), [20, 5]);
+  assert.deepEqual(variations.data.variations.map(row => row.productId), ['101']);
+  assert.deepEqual(suppliers.data.suppliers.map(row => [row.supplierId, row.revenue, row.knownProductsCount]),
+    [['901', 20, 1], ['902', 5, 1]]);
+  assert.equal(suppliers.data.suppliers.reduce((sum, row) => sum + row.revenue, 0), 25);
+  assert.ok(!JSON.stringify(suppliers).includes('ordersCount'));
+});
+
+test('recursos especializados recusam filtros que mudariam o significado dos totais', async () => {
+  const { context } = await fixture();
+  const run = (resource, filters) => copy(context.PRAReportService.executeResource(resource, filters));
+  assert.equal(run('kpis', { supplierId: '901' }).errors[0].code, 'report_filter_unsupported');
+  assert.equal(run('trend', { supplierId: '901' }).errors[0].code, 'report_filter_unsupported');
+  assert.equal(run('kpis', { view: 'parent' }).errors[0].code, 'report_filter_unsupported');
+  assert.equal(run('trend', { limit: '1' }).errors[0].code, 'report_filter_unsupported');
+  assert.equal(run('variations', { view: 'parent' }).errors[0].code, 'report_invalid_view');
+  assert.equal(run('suppliers', { view: 'parent' }).errors[0].code, 'report_invalid_view');
+  assert.equal(run('kpis', { startDate: '2026-09-10malicious' }).errors[0].code,
+    'report_invalid_start_date');
+  assert.deepEqual(run('suppliers', { supplierId: '902' }).data.suppliers.map(row => row.supplierId), ['902']);
+});
+
 test('relatórios: validações retornam códigos estáveis sem detalhes internos', async () => {
   const fixtureValue = await fixture();
   const invalid = copy(fixtureValue.context.PRAReportService.execute({
@@ -156,7 +191,10 @@ test('web app preserva saúde legada e roteia HTML e envelopes novos', async () 
     PRAOAuthService: {},
     PRAHealthService: { getStatus: () => ({ status: 'ok' }) },
     PRAReportService: {
-      execute: filters => ({ data: { filters }, meta: {}, filtersApplied: filters, errors: [] })
+      execute: filters => ({ data: { filters }, meta: {}, filtersApplied: filters, errors: [] }),
+      executeResource: (resource, filters) => ({
+        data: { resource }, meta: {}, filtersApplied: filters, errors: []
+      })
     },
     HtmlService: {
       createHtmlOutput: value => ({ value, setTitle() { return this; } }),
@@ -178,6 +216,8 @@ test('web app preserva saúde legada e roteia HTML e envelopes novos', async () 
   assert.equal(context.doGet({ parameter: { view: 'dashboard' } }).file, 'Index');
   const dashboard = JSON.parse(context.doGet({ parameter: { resource: 'dashboard' } }).value);
   assert.deepEqual(Object.keys(dashboard), ['data', 'meta', 'filtersApplied', 'errors']);
+  const suppliers = JSON.parse(context.doGet({ parameter: { resource: 'suppliers' } }).value);
+  assert.equal(suppliers.data.resource, 'suppliers');
   const unknown = JSON.parse(context.doGet({ parameter: { resource: 'missing' } }).value);
   assert.equal(unknown.errors[0].code, 'report_unknown_resource');
   assert.deepEqual(JSON.parse(context.doGet({ parameter: {} }).value), { status: 'ok' });
@@ -189,6 +229,7 @@ test('HTML usa somente o bridge do contrato e possui estados acessíveis', async
   assert.match(html, /getDashboardSnapshot/);
   assert.match(html, /role="alert"/);
   assert.match(html, /aria-live="polite"/);
+  assert.match(html, /fornecedor filtra apenas o ranking/i);
   assert.match(html, /dados sintéticos/);
   assert.doesNotMatch(html, /https?:\/\//);
   assert.doesNotMatch(html, /SpreadsheetApp|openById/);
