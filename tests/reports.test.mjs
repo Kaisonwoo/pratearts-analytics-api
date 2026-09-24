@@ -91,6 +91,7 @@ async function fixture(options = {}) {
   });
   vm.runInContext(await readFile('src/repositories/DataLayerSchema.gs', 'utf8'), context);
   vm.runInContext(await readFile('src/services/ReportService.gs', 'utf8'), context);
+  vm.runInContext(await readFile('src/services/ReportCsvService.gs', 'utf8'), context);
   return { context, logs, locked: () => locked };
 }
 
@@ -165,6 +166,26 @@ test('recursos especializados recusam filtros que mudariam o significado dos tot
   assert.deepEqual(run('suppliers', { supplierId: '902' }).data.suppliers.map(row => row.supplierId), ['902']);
 });
 
+test('CSV exporta somente agregados confirmados e neutraliza fórmulas em texto', async () => {
+  const { context } = await fixture();
+  const trend = copy(context.PRAReportService.executeResource('trend', {}));
+  const csv = context.PRAReportCsvService.serialize('trend', trend.data);
+  assert.ok(csv.startsWith('\uFEFF"period","valid_orders","items_quantity","revenue","average_ticket"\r\n'));
+  assert.equal(csv.trim().split('\r\n').length, 3);
+  assert.doesNotMatch(csv, /999/);
+
+  const products = context.PRAReportCsvService.serialize('products', {
+    products: [{
+      position: 1, view: 'product', productId: '101', sku: '-SYN-A', supplierId: '901',
+      name: '=HYPERLINK("x", "y")\nOutra linha', quantity: -2, revenue: -3, ordersCount: 1
+    }]
+  });
+  assert.match(products, /"\t=HYPERLINK\(""x"", ""y""\) Outra linha"/);
+  assert.match(products, /"\t-SYN-A"/);
+  assert.match(products, /,-2,-3,1\r\n$/);
+  assert.equal(products.trim().split('\r\n').length, 2);
+});
+
 test('relatórios: validações retornam códigos estáveis sem detalhes internos', async () => {
   const fixtureValue = await fixture();
   const invalid = copy(fixtureValue.context.PRAReportService.execute({
@@ -194,8 +215,10 @@ test('web app preserva saúde legada e roteia HTML e envelopes novos', async () 
       execute: filters => ({ data: { filters }, meta: {}, filtersApplied: filters, errors: [] }),
       executeResource: (resource, filters) => ({
         data: { resource }, meta: {}, filtersApplied: filters, errors: []
-      })
+      }),
+      errorEnvelope: (code, message) => ({ data: null, meta: {}, filtersApplied: {}, errors: [{ code, message }] })
     },
+    PRAReportCsvService: { serialize: resource => `header\r\n${resource}\r\n` },
     HtmlService: {
       createHtmlOutput: value => ({ value, setTitle() { return this; } }),
       createHtmlOutputFromFile: file => ({
@@ -205,10 +228,11 @@ test('web app preserva saúde legada e roteia HTML e envelopes novos', async () 
       })
     },
     ContentService: {
-      MimeType: { JSON: 'json' },
+      MimeType: { JSON: 'json', CSV: 'csv' },
       createTextOutput: value => ({
-        value, mime: null,
-        setMimeType(mime) { this.mime = mime; return this; }
+        value, mime: null, fileName: null,
+        setMimeType(mime) { this.mime = mime; return this; },
+        downloadAsFile(fileName) { this.fileName = fileName; return this; }
       })
     }
   });
@@ -218,9 +242,47 @@ test('web app preserva saúde legada e roteia HTML e envelopes novos', async () 
   assert.deepEqual(Object.keys(dashboard), ['data', 'meta', 'filtersApplied', 'errors']);
   const suppliers = JSON.parse(context.doGet({ parameter: { resource: 'suppliers' } }).value);
   assert.equal(suppliers.data.resource, 'suppliers');
+  const csv = context.doGet({ parameter: { resource: 'suppliers', format: 'csv' } });
+  assert.equal(csv.mime, 'csv');
+  assert.equal(csv.fileName, 'pratearts-suppliers.csv');
+  assert.equal(csv.value, 'header\r\nsuppliers\r\n');
+  assert.equal(context.doGet({ parameter: { resource: 'products', view: 'parent', format: 'csv' } }).mime,
+    'csv');
+  assert.equal(JSON.parse(context.doGet({ parameter: { resource: 'dashboard', format: 'csv' } }).value)
+    .errors[0].code, 'report_export_unsupported');
+  assert.equal(JSON.parse(context.doGet({ parameter: { resource: 'missing', format: 'csv' } }).value)
+    .errors[0].code, 'report_unknown_resource');
+  assert.equal(JSON.parse(context.doGet({ parameter: { resource: 'products', format: 'xlsx' } }).value)
+    .errors[0].code, 'report_invalid_format');
   const unknown = JSON.parse(context.doGet({ parameter: { resource: 'missing' } }).value);
   assert.equal(unknown.errors[0].code, 'report_unknown_resource');
   assert.deepEqual(JSON.parse(context.doGet({ parameter: {} }).value), { status: 'ok' });
+});
+
+test('CSV aplica validação real dos filtros antes de produzir o arquivo', async () => {
+  const { context } = await fixture();
+  context.ContentService = {
+    MimeType: { JSON: 'json', CSV: 'csv' },
+    createTextOutput(value) {
+      return {
+        value, mime: null,
+        setMimeType(mime) { this.mime = mime; return this; },
+        downloadAsFile() { return this; }
+      };
+    }
+  };
+  vm.runInContext(await readFile('src/api/WebApp.gs', 'utf8'), context);
+  const invalid = context.doGet({ parameter: {
+    resource: 'products', view: 'dashboard', format: 'csv'
+  } });
+  assert.equal(invalid.mime, 'json');
+  assert.equal(JSON.parse(invalid.value).errors[0].code, 'report_invalid_view');
+
+  const valid = context.doGet({ parameter: {
+    resource: 'products', view: 'parent', format: 'csv'
+  } });
+  assert.equal(valid.mime, 'csv');
+  assert.match(valid.value, /"parent","100"/);
 });
 
 test('HTML usa somente o bridge do contrato e possui estados acessíveis', async () => {

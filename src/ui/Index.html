@@ -241,6 +241,7 @@
       font-weight: 800;
       white-space: nowrap;
     }
+    .chip.problem { color: var(--danger); background: var(--danger-soft); }
     .chart-wrap { position: relative; min-height: 270px; }
     #trendChart { width: 100%; height: 270px; overflow: visible; }
     .chart-grid { stroke: #e9efed; stroke-width: 1; }
@@ -305,9 +306,10 @@
     .bar span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--brand), #4ba990); }
     .ops {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 12px;
     }
+    #syncStatus.problem { color: var(--danger); }
     .op-card { min-height: 108px; padding: 16px; border-radius: 16px; background: #f7f9f8; }
     .op-card span { display: block; color: var(--muted); font-size: 10px; font-weight: 750; text-transform: uppercase; letter-spacing: .07em; }
     .op-card strong { display: block; margin-top: 11px; font-size: 15px; line-height: 1.35; }
@@ -446,7 +448,7 @@
 
         <article class="panel" id="quality">
           <div class="panel-head">
-            <div><h2>Qualidade dos dados</h2><span class="panel-sub">Exceções preservadas e auditáveis</span></div>
+            <div><h2>Qualidade dos dados</h2><span class="panel-sub">Histórico completo, independente dos filtros</span></div>
             <span class="chip">Monitorado</span>
           </div>
           <div class="quality-score">
@@ -474,11 +476,12 @@
 
         <article class="panel">
           <div class="panel-head">
-            <div><h2>Operação</h2><span class="panel-sub">Estado técnico sem exposição de segredos</span></div>
+            <div><h2>Operação</h2><span class="panel-sub">Estado técnico atual, independente dos filtros</span></div>
             <span class="chip" id="operationChip">Verificando</span>
           </div>
           <div class="ops">
             <div class="op-card"><span>Último cálculo</span><strong id="lastCalculation">—</strong><small>Horário do mart</small></div>
+            <div class="op-card"><span>Última sincronização</span><strong id="syncStatus">—</strong><small id="syncDetail">Aguardando consulta</small></div>
             <div class="op-card"><span>Triggers</span><strong id="triggerCount">—</strong><small id="triggerHandlers">Nenhum handler</small></div>
             <div class="op-card"><span>Runtime</span><strong id="runtimeRevision">—</strong><small id="runtimeHash">Hash indisponível</small></div>
           </div>
@@ -604,6 +607,22 @@
       }
       function renderOperations(operations, runtime) {
         document.getElementById('lastCalculation').textContent = dateTime(operations.latestCalculationAt);
+        var sync = operations.latestSync || null;
+        var status = sync && sync.status;
+        var statusLabels = {
+          started: 'Iniciada', in_progress: 'Em andamento', completed: 'Concluída',
+          blocked: 'Bloqueada', failed: 'Falhou'
+        };
+        var problem = status === 'blocked' || status === 'failed';
+        var syncStatus = document.getElementById('syncStatus');
+        syncStatus.textContent = sync
+          ? (Object.prototype.hasOwnProperty.call(statusLabels, status) ? statusLabels[status] : 'Estado desconhecido')
+          : 'Sem registro';
+        syncStatus.classList.toggle('problem', problem);
+        document.getElementById('syncDetail').textContent = sync
+          ? dateTime(sync.finishedAt || sync.startedAt) +
+            (problem && sync.errorCode ? ' · ' + sync.errorCode : '')
+          : 'Nenhuma execução em sync_runs';
         var triggers = operations.triggers || { installed: null, handlers: [] };
         document.getElementById('triggerCount').textContent = triggers.installed == null ? 'Não disponível' : integer(triggers.installed);
         document.getElementById('triggerHandlers').textContent = triggers.handlers && triggers.handlers.length ? triggers.handlers.join(', ') : 'Nenhum handler';
@@ -611,7 +630,12 @@
         var hash = runtime && runtime.sourceHash;
         document.getElementById('runtimeRevision').textContent = revision ? revision.slice(0, 10) : 'Não disponível';
         document.getElementById('runtimeHash').textContent = hash ? 'SHA-256 ' + hash.slice(0, 12) + '…' : 'Hash indisponível';
-        document.getElementById('operationChip').textContent = Number(triggers.installed || 0) === 0 ? 'Sem agenda' : 'Agendado';
+        var chip = document.getElementById('operationChip');
+        chip.textContent = problem ? 'Falha registrada' :
+          (status === 'started' || status === 'in_progress') ? 'Em andamento' :
+          triggers.installed == null ? 'Agenda indisponível' :
+          Number(triggers.installed) === 0 ? 'Sem agenda' : 'Agendado';
+        chip.classList.toggle('problem', problem);
       }
       function render(envelope) {
         setLoading(false);
@@ -666,7 +690,14 @@
               { position: 4, name: 'Variação sintética Brisa', sku: 'DEMO-04', supplierId: '9001', quantity: 18, ordersCount: 12, revenue: 2140 }
             ],
             quality: { totalErrors: 7, unresolvedErrors: 7, errorsByCode: [{ code: 'synthetic_quality_error', count: 7 }], pendingWindows: 0 },
-            operations: { latestCalculationAt: '2026-09-08T18:30:00.000Z', triggers: { installed: 0, handlers: [] } }
+            operations: {
+              latestCalculationAt: '2026-09-08T18:30:00.000Z',
+              latestSync: {
+                status: 'completed', startedAt: '2026-09-08T18:25:00.000Z',
+                finishedAt: '2026-09-08T18:30:00.000Z', errorCode: null
+              },
+              triggers: { installed: 0, handlers: [] }
+            }
           },
           meta: {
             generatedAt: new Date().toISOString(),
