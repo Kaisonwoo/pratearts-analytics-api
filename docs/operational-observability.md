@@ -1,6 +1,7 @@
 # Observabilidade operacional
 
-Esta implementação atende PRA-31 / US-031 e TT-031.
+Esta implementação atende PRA-41 / US-031 e PRA-72 / TT-031. A história
+PRA-31 corresponde a US-025 (resumo de KPIs).
 
 ## Registro de execuções
 
@@ -31,6 +32,24 @@ Se o webhook não estiver configurado, a rotina:
 
 O alerta contém apenas job, código estável, `correlationId` e horário. O valor
 do webhook nunca é escrito em logs ou respostas.
+
+## Estado da homologação
+
+Em 25/09/2026, a execução diária iniciada às 06:01:51 (São Paulo) e quatro
+continuações baseadas no tempo terminaram sem erro. Após a rotação protegida e a
+reautorização das credenciais Bling, o teste da API de produtos retornou HTTP
+200 e uma nova execução manual de `runDailySync()` terminou com
+`daily_sync_completed`, `pending: 0` e sem continuação. A aba `sync_runs`
+registrou `5e99c836-6a6e-46a0-9ee4-30092837feeb` com `status: completed`,
+`duration_ms: 50663`, `pages_processed: 1`, `records_processed: 14` e
+`error_code` vazio. O ciclo processou 474 pedidos e 909 itens, sem que essas
+contagens representem crescimento líquido da base.
+
+PRA-41 e PRA-72 estão em Fazendo no Jira. A conta Google pessoal usada na
+implantação não fornece o webhook do Google Chat; a propriedade
+`ALERT_GOOGLE_CHAT_WEBHOOK_URL` não está configurada. A entrega de um alerta
+crítico controlado e a primeira renovação automática do token após a rotação
+ainda não foram comprovadas. Nenhum valor de credencial foi registrado aqui.
 
 ## Validação após implantação
 

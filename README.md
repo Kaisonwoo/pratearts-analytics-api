@@ -182,7 +182,8 @@ Esse comando valida a estrutura, o manifesto e padrões comuns de vazamento de s
 - Marts analíticos incrementais: PRA-30 / US-022 e PRA-63 / TT-022
 - Contrato da API e painel de homologação: PRA-29 / US-024 e PRA-61 / TT-024
 - Automação diária retomável: PRA-36 / US-030 e PRA-71 / TT-030
-- Observabilidade e alertas operacionais: PRA-31 / US-031 e TT-031
+- Observabilidade e alertas operacionais: PRA-41 / US-031 e PRA-72 / TT-031
+- Resumo de KPIs: PRA-31 / US-025
 
 ## Referências oficiais
 
